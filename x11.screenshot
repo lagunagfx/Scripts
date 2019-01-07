@@ -1,0 +1,14 @@
+#!/bin/sh
+
+DATE=$(  date +%Y%m%d_%H%M )
+MACHINE=$( hostname )
+FOLDER=$HOME/Imágenes
+FILE_XWD="/tmp/screenshot_"$MACHINE"_"$DATE".xwd"
+FILE_PNG=$FOLDER"/"$(  basename $FILE_XWD .xwd )".png"
+
+xwd -root -out $FILE_XWD
+
+if [ -r $FILE_XWD ];
+then
+	convert $FILE_XWD $FILE_PNG && rm $FILE_XWD
+fi
