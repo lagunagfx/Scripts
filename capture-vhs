@@ -1,0 +1,219 @@
+#!/bin/sh
+
+# Description:
+# This script captures an analog signal from an external cheap USB video input
+# It's customized for an acceptable non-interlaced/smooth picture output, with NO special handling of the interlaced input.
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ChangeLog:
+# 2021.02.21 | 1st draft recycling various scripts from years past.
+# 2021.03.19 | Improved online help and interactivity 
+
+scriptname=$( basename $0 )
+
+usage() {
+    printf "usage: %s [-option] --time <DURATION>\n" $scriptname
+    printf "\nmandatory parameters:\n"
+    printf "   -t,   --time           Capture time in hh:mm:ss format\n"
+    printf "\noptions:\n"
+    printf "   -h,   --help           Show this help message\n"
+    printf "   -i,   --input          Specify an input file or device, other than the default one\n"
+    printf "         --debug          Developer's mode\n"
+
+    printf "   -c,   --capture        Grab audio (aac) and video (x264) from a capture device\n"
+    printf "   --da, --demux-audio    Extract the audio stream\n"
+    printf "   --dv, --demux-video    Extract and reencode the video stream\n"
+
+    printf "   -m,   --mux            Join both audio and video streams\n"
+    printf "         --title          Add a TITLE metadata string\n"
+    printf "         --delete         Remove both isolated streams and logs after muxing"
+}
+
+check_basics() {
+    case "$ACTION" in
+	"capture")
+	    # Check if some valid capture time has been specified
+	    if [ -z "$DURATION" ];
+	    then
+		printf "\e[31mERROR:\e[0m A valid capture time must be specified.\n"
+		exit 1
+	    fi
+	    ;;
+	"mux")
+	    if [ -z "$OUTPUT" ];
+	    then
+		printf "\e[31mERROR:\e[0m An output file name must be specified.\n"
+		exit 1
+	    fi
+	    ;;
+    esac
+}
+
+defaults() {
+
+    default_capture_output="capture_original.mp4"
+    default_demuxaudio_output="capture_stream-audio.m4a"
+    default_demuxvideo_output="capture_stream-video.mp4"
+    default_metadata_title="Encoded on $( uname -s ) using ffmpeg $( ffmpeg -version | head -n 1 | cut -d " " -f 3 ) on $( date +%F\ %R )."
+    default_cleanaftermuxing="no"
+
+    case "$ACTION" in
+	"capture")
+	    [ -z $OUTPUT ] && OUTPUT="$default_capture_output"
+	    ;;
+	"demux_audio")
+	    [ -z $INPUT ] && INPUT="$default_capture_output" 
+	    [ -z $OUTPUT ] && OUTPUT="$default_demuxaudio_output"
+	    ;;	    
+	"demux_video")
+	    [ -z $INPUT ] && INPUT="$default_capture_output" 
+	    [ -z $OUTPUT ] && OUTPUT="$default_demuxvideo_output"
+	    ;;
+	"mux")
+	    [ -z $INPUT_AUDIO ] && INPUT_AUDIO="$default_demuxaudio_output"
+	    [ -z $INPUT_VIDEO ] && INPUT_VIDEO="$default_demuxvideo_output" 
+	    [ -z $TITLE ] && TITLE="$default_metadata_title"
+	    [ -z $CLEAN_AFTER_MUXING] && CLEAN_AFTER_MUXING="$default_cleanaftermuxing"
+	    ;;	    
+    esac
+} 
+
+pulseaudio_list_inputs() {
+    pactl list short sources | grep -i input
+}
+
+capture() {
+    ffmpeg -f v4l2 -standard PAL -video_size 720x576 -thread_queue_size 4096 -i /dev/video2 -channel_layout stereo \
+    -f pulse -thread_queue_size 4096 -i 4 -c:v libx264 -aspect 4:3 -pix_fmt yuv420p -crf 10 \
+    -c:a aac -ac 2 -ar 44100 -b:a 128k -af alimiter=limit=0.9:level=disabled \
+    -preset veryfast -t $DURATION -y "$OUTPUT"
+} 
+
+demux_audio() {
+    # split the audio stream from the raw captured footage
+    ffmpeg -y -i "$INPUT" -vn -c:a copy "$OUTPUT"
+    #ffmpeg -y -i "$INPUT" -filter:a loudnorm "$OUTPUT"
+    #sox $AUAAC --norm=-0.3 $AUMAX # normalize audio 
+    #ffmpeg -y -i $AUMAX -c:a aac -b:a 128k $AUAAC
+}
+
+demux_video() {
+    ffmpeg -y -i "$INPUT" -an -r 25 -c:v libx264 -crf 26 -vf "yadif=1:1,hqdn3d=2" -f mp4 \
+    -preset faster -movflags +faststart -report "$OUTPUT"
+}
+
+mux() {
+    # join back together both encoded audio and video streams
+    ffmpeg -y -i $INPUT_VIDEO -i $INPUT_AUDIO -c:v copy -c:a copy -metadata title="$TITLE" "$OUTPUT" 
+    [ "$CLEAN_AFTER_MUXING" == "yes" ] && rm $INPUT_AUDIO $INPUT_VIDEO ffmpeg-????????-??????.log
+}
+
+action() {
+    case $ACTION in
+	"capture")
+	    capture
+	    ;;
+	"demux_audio")
+	    demux_audio
+	    ;;
+	"demux_video")
+	    demux_video
+	    ;;
+	"mux")
+	    mux
+	    ;;
+    esac
+}
+
+user_args() {
+    case $1 in
+	"-i"|"--input")
+	    INPUT="$2"
+	    if [ -z "$2" ];
+	    then
+		printf "\e[31mERROR:\e[0m A valid file name must be provided"
+		exit 1
+	    fi
+	    ;;
+	"-o"|"--output")
+	    OUTPUT="$2"
+	    if [ -z "$2" ];
+	    then
+		printf "\e[31mERROR:\e[0m A valid file name must be provided"
+		exit 1
+	    fi
+	    ;;
+	"-t"|"--time")
+	    DURATION="$2"
+	    ;;
+	"-c"|"--capture")
+	    ACTION="capture"
+	    ;;
+	"--da"|"--demux-audio")
+	    ACTION="demux_audio"
+	    ;;
+	"--dv"|"--demux-video")
+	    ACTION="demux_video"
+	    ;;
+	"-m"|"--mux")
+	    ACTION="mux"
+	    ;;
+	"--title")
+	    TITLE="$2"
+	    ;;
+	"--delete")
+	    CLEAN_AFTER_MUXING="yes"
+	    ;; 
+    esac
+}
+
+check_args() {
+    if [ $# -eq 0 ];
+    then
+	# script is called with zero arguments 
+	usage
+	exit 0
+    else
+	# one or more arguments are used
+	while [ "$1" ];
+	do
+	    # list of accepted arguments
+	    case "$1" in
+		# default help option
+		"-h"|"--help")
+		    usage
+		    exit 0
+		    ;;
+		"--debug")
+		    debugmode="true"
+		    ;;
+		# all user defined opts handled by user_args
+		*)
+		    user_args "$@"
+		    ;;
+	    esac
+	    # removes the first item from the list of given arguments ('$@')
+	    shift
+	done	
+    fi
+}
+
+main() {
+    # prerequisites of the script to be checked BEFORE any argument evalutation
+    check_args "$@"
+    check_basics
+    defaults
+    # Execute standard OR debug version of the script
+    if [ -z $debugmode ];
+    then
+	action
+    else
+	printf "\e[1m-!>\e[0m script %s running in DEBUG mode:\n" $scriptname
+	# script actions according to its arguments
+    fi
+}
+
+# the actual script execution call goes here
+main "$@"
