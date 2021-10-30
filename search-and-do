@@ -1,0 +1,168 @@
+#!/bin/sh
+
+# Description:
+# This is a brief description of my script
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ChangeLog:
+# 2020.02.03 | 1st revision of this template
+# 2021.04.06 | Some small styling fixes
+
+# Standard functions and variables for every script
+	
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="0.2"
+
+usage() {
+	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "   -n,   --name     Search by filename (accepts wildcards)"
+	printf "   -h,   --help     show this help message\n"
+	printf "         --debug    developer's mode\n"
+}
+
+version() {
+	printf "\e[33m%s\e[0m version \e[33m%s\e[0m.\n" $SCRIPT_NAME $SCRIPT_VERSION	
+}
+
+newline_set() {
+	NEWLINE="YES"	
+}
+
+newline_check() {
+	[ "$NEWLINE" == "YES" ] && echo
+	NEWLINE="NO"
+}
+
+defaults() {
+	SEARCH_PATH="."
+	NEWLINE="NO"
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					DEBUG="YES"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac			
+	
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+user_args() {
+
+	# last argument is mandatory (given it's not --help or --version)
+	if [ $# -eq 1 ];
+	then
+		SEARCH_EXPR="$1"
+	fi
+
+	case $1 in
+		"-m"|"--move")
+			ACTION_MOVE="YES"
+			if [ ! -z "$2" ];
+			then
+				DESTINATION="$2"
+			else
+				printf "\e[31mERROR:\e[0m Destination path not specified. Aborting!\n"
+				exit 1
+			fi
+			;;
+		"-p"|"--path")
+			SEARCH_PATH="$2"
+			;;
+		"-x"|"--extract")
+			ACTION_EXTRACT="YES"
+			;;	
+	esac
+}
+
+actions() {
+
+	# ACTION: Find files first
+	printf "\n\e[33m-->\e[0m Searching for files matching \e[33m%s\e[0m wildcard expression ..." $SEARCH_EXPR
+
+	LIST=$( find "$SEARCH_PATH" -name "$SEARCH_EXPR" -type f -print )
+
+	if [ -z "$LIST" ];
+	then
+		# if no match is found, abort and exit
+		printf " \e[91mNO MATCH\e[0m\n\n"
+		exit 1
+	else
+		printf "\n\n"
+		# iterate through every item found
+		for i in $LIST;
+		do
+			ITEM_PATH="$( dirname $i )" 
+			ITEM_FILE="$( basename $i )"
+			printf "\e[33m-->\e[0m Found file \e[33m%s\e[0m\n" "$i"	
+
+			# extract item to its current folder
+			if [ "$ACTION_EXTRACT" == "YES" ];
+			then
+				printf "\e[33m-->\e[0m Extracting file \e[33m%s\e[0m to \e[33m%s\e[0m ..." "$ITEM_FILE" "$ITEM_PATH"
+				lha -xq2w="$ITEM_PATH" "$i" && printf " \e[92mOK\e[0m\n"
+				newline_set
+			fi
+
+			# move item to a common destination
+			if [ "$ACTION_MOVE" == "YES" ];
+			then			
+				mv "$i" "$DESTINATION" && printf "\e[33m-->\e[0m Moving \e[33m%s\e[0m to \e[33m%s\e[0m\n" $ITEM_FILE $DESTINATION
+				newline_set
+			fi
+
+			newline_check
+		done
+
+	fi
+}
+
+# MAIN and DEBUG versions separated so it's possible to "try new things" inside debug()
+# while retaining the last working code writeup in main()  
+
+main() {
+	# prerequisites of the script to be checked BEFORE any argument evalutation
+	defaults
+	check_args "$@"
+	# Execute standard OR debug version of the script
+	if [ -z $debugmode ];
+	then
+		version
+		actions
+	else
+		printf "\e[31mDEBUG:\e[0m script %s running\n" $scriptname
+	fi
+}
+
+# script execution call goes here
+main "$@"
