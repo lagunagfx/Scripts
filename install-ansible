@@ -1,0 +1,56 @@
+#!/bin/sh
+
+# Description : Ansible installer script
+#
+# Author : Jorge Barrientos Poisson
+#
+# ChangeLog : 
+# 2021.11.08 | 1st quick draft. Debian only
+
+
+# Debian Based
+defaults() {
+
+	# is the OS Debian-based ?
+
+	DEBIAN_BASED="NO"
+
+	if [ ! -z $( uname -v | grep DEBIAN ) ];
+	then
+		DEBIAN_BASED="YES"
+	fi
+
+	ANSIBLE_REPO_URL="deb http://ppa.launchpad.net/ansible/ansible/ubuntu focal main"
+	ANSIBLE_REPO_FILE="/etc/apt/sources.list.d/ansible.list"
+}
+
+ansible_addrepo() {
+	if [ ! -r $ANSIBLE_REPO_FILE ];
+	then
+		echo $ANSIBLE_REPO_URL | sudo tee $ANSIBLE_REPO_FILE > /dev/null && \
+		printf "\e[32m-->\e[0m Adding \e[38mansible\e[0m repository to \e[32m%s\e[0m\n" $ANSIBLE_REPO_FILE
+	fi
+}
+
+ansible_install_debian() {
+	if [ -r $ANSIBLE_REPO_FILE ];
+	then
+		sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
+		sudo apt update
+		sudo apt install ansible
+	fi
+}
+
+ansible_install_arch() {
+	sudo pacman -Syyu
+	sudo pacman -S ansible
+}
+
+defaults
+
+if [ "$DEBIAN_BASED" == "YES " ];
+then	
+	ansible_addrepo && ansible_install_debian
+else
+	ansible_install_arch
+fi
