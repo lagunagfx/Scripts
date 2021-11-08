@@ -6,7 +6,7 @@ APT="/etc/apt/sources.list.d/ansible.list"
 
 if [ ! -r $APT ];
 then
-	echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu focal main" > $APT && \
+	echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu focal main" | sudo tee $APT && \
 	printf "\e[33m-->\e[1m Adding Ansible repository to %s" $APT && \
 	SUCCESS=YES
 fi
