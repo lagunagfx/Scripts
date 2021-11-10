@@ -7,15 +7,15 @@
 # ChangeLog : 
 # 2021.11.08 | 1st quick draft. Debian only
 # 2021.11.09 | Script is now multidistro (Debian/Arch based)
+# 2021.11.10 | Tested on cloudbook (Debian 11 Bullseye) with success (needs prettier logging)
 
-# Debian Based
 defaults() {
 
 	# is the OS Debian-based ?
 
 	DEBIAN_BASED="NO"
 
-	if [ ! -z $( uname -v | grep DEBIAN ) ];
+	if [ ! -z "$( uname -v | grep -i debian )" ];
 	then
 		DEBIAN_BASED="YES"
 	fi
@@ -48,7 +48,7 @@ ansible_install_arch() {
 
 defaults
 
-if [ "$DEBIAN_BASED" == "YES" ];
+if [ "$DEBIAN_BASED"=="YES" ];
 then	
 	ansible_addrepo && ansible_install_debian
 else
