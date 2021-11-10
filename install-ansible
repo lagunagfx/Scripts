@@ -48,7 +48,7 @@ ansible_install_arch() {
 
 defaults
 
-if [ "$DEBIAN_BASED" == "YES " ];
+if [ "$DEBIAN_BASED" == "YES" ];
 then	
 	ansible_addrepo && ansible_install_debian
 else
