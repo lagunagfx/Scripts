@@ -16,7 +16,7 @@
 #
 #
 # ---------------------------------------------------------------------------------------
-#  Variables and Settings:
+#  Variables and Settings
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
@@ -33,7 +33,7 @@ usage() {
 }
 
 version() {
-	printf "\e[33m%s\e[0m version \e[33em%s\e[0m.\n" $SCRIPT_NAME $SCRIPT_VERSION
+	printf "\e[33m%s\e[0m version \e[33m%s\e[0m.\n" $SCRIPT_NAME $SCRIPT_VERSION
 }
 
 check_args() {
@@ -48,7 +48,6 @@ check_args() {
 		do
 			# list of accepted arguments
 			case "$1" in
-
 				# default help option
 				"-h"|"--help")
 					usage
@@ -66,7 +65,6 @@ check_args() {
 					user_args "$@"
 					;;
 			esac
-
 			# removes the first item from the list of given arguments ('$@')
 			shift
 		done	

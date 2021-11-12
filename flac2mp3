@@ -1,0 +1,216 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Converts a lossless audio FLAC file to high quality MP3
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+# 2021.04.06 | First draft. Used on my latest Juno downloads
+# 2021.11.12 | Refactoring file to the latest template. Published on GitHub
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="0.1"
+
+# ---------------------------------------------------------------------------------------
+#  Standard functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+    printf "usage: %s [-h]\n" $SCRIPT_NAME
+    printf "   -f,   --file           lossless FLAC file input\n"
+    printf "   -p,   --preset         Use a preconfigured metadata extraction scheme\n"
+    printf "         --ta             Add id3 tag ARTIST\n"
+    printf "         --tt             Add id3 tag TITLE\n"
+    printf "         --ta             Add id3 tag ALBUM\n"
+    printf "         --tn             Add id3 tag NUMBER/TOTAL\n"
+    printf "   -h,   --help           show this help message\n"
+    printf "         --debug          developer's mode\n"
+}
+
+version() {
+	printf "\e[33m%s\e[0m version \e[33m%s\e[0m.\n" $SCRIPT_NAME $SCRIPT_VERSION
+}
+
+check_args() {
+    if [ $# -eq 0 ];
+    then
+		# script is called with zero arguments 
+		usage
+		exit 0
+    else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"-v"|"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					debugmode="true"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+    fi
+}
+
+check_essentials() {
+    if [ -z "$INPUT" ];
+    then
+		printf "\e[31mERROR:\e[0m A source file must be specified\n"
+	exit 1
+    fi
+
+    if [ ! -r "$INPUT" ];
+    then
+		printf "\e[31mERROR:\e[0m Could not read file \e[33m$INPUT\e[0m\n"
+	exit 1
+    fi
+}
+
+defaults() {
+    # LAME_OPTS="--cbr -h -b 320 --add-id3v2 --ta $TRACK_ARTIST --tt $TRACK_TITLE --tl $TRACK_ALBUM --tn $TRACK_NUMBER --ty $TRACK_YEAR --tg $TRACK_GENRE --ti $COVERART" 
+    FLAC_OPTS="-d"
+}
+
+build_syntax() {
+    add_options() {
+	if [ "$add_options" == "true" ];
+	then
+	    LAME_OPTS+=" " 	    
+	fi
+    }
+}
+
+action() {
+    WAVE=$( basename "$INPUT" .flac )".wav"
+
+    if [ ! -r "$WAVE" ];
+    then
+	flac "$FLAC_OPTS" "$INPUT"
+    fi
+	
+    lame --cbr -h -b 320 --id3v2-only \
+	 --ta "$TRACK_ARTIST" --tt "$TRACK_TITLE" --tl "$TRACK_ALBUM" --tn "$TRACK_NUMBER" \
+	 --ty "$TRACK_YEAR" --tg "$TRACK_GENRE" --tv "TBPM=$TRACK_BPM" --ti "$COVERART" \
+	 "$WAVE" && \
+
+    rm "$WAVE" "$COVERART"
+}
+
+show_metadata() {
+    printf "\nMetadata extracted from FLAC file:\n\n"
+    printf "Artist:\t\t\e[33m%s\e[0m\n" "$TRACK_ARTIST" 
+    printf "Title:\t\t\e[33m%s\e[0m\n" "$TRACK_TITLE" 
+    printf "Album:\t\t\e[33m%s\e[0m\n" "$TRACK_ALBUM"
+    printf "Track Number:\t\e[33m%s\e[0m\n" "$TRACK_NUMBER"
+    printf "Year:\t\t\e[33m%s\e[0m\n" "$TRACK_YEAR"
+    printf "Genre:\t\t\e[33m%s\e[0m\n" "$TRACK_GENRE"
+    printf "BPM:\t\t\e[33m%s\e[0m\n" "$TRACK_BPM"
+
+    if [ -r "$COVERART" ];
+    then
+	printf "Cover Art:\t\e[32mFound\e[0m\n"
+    else
+	printf "Cover Art:\t\e[31mNot ound\e[0m\n"
+    fi	
+
+    echo
+}
+
+preset_juno() {
+
+    COVERART=$( basename "$INPUT" .flac )".jpg"
+    metaflac --export-picture-to="$COVERART" "$INPUT"
+
+    extract_tag() {
+	if [ ! -z "$1" ];
+	then
+	    metaflac --list --block-number=1 "$INPUT" | grep "$1" | cut -d "=" -f 2
+	else
+	    printf "\e[31mERROR:\e[0m function extract_tag() can't find tag \e[33m$1\e[0m.\n"
+	    exit 1	    
+	fi
+    }
+
+    TRACK_ARTIST=$( extract_tag " ARTIST" )
+    TRACK_TITLE=$( extract_tag "TITLE=" ) 
+    TRACK_ALBUM=$( extract_tag "ALBUM=" ) 
+    TRACK_NUMBER=$( extract_tag "TRACKNUMBER=" ) 
+    TRACK_YEAR=$( extract_tag "DATE=" ) 
+    TRACK_GENRE=$( extract_tag "GENRE=" )
+    TRACK_BPM=$( extract_tag "BPM=" )
+    TRACK_ARTWORK=$COVERART
+
+}
+
+user_args() {
+    case $1 in
+	"-f"|"--file")
+	    INPUT="$2"
+	    ;;
+	"-p"|"--preset")
+	    PRESET="$2"
+	    ;;
+	"--ta")
+	    TRACK_ARTIST="$2"
+	    ;;
+	"--tt")
+	    TRACK_TITLE="$2"
+	    ;;
+	"--tl")
+	    TRACK_ALBUM="$2"
+	    ;;
+	"--tn")
+	    TRACK_NUMBER="$2"
+	    ;;
+	"--ty")
+	    TRACK_YEAR="$2"
+	    ;;
+	"--tg")
+	    TRACK_GENRE="$2"
+	    ;;	    
+    esac
+}
+
+main() {
+    check_args "$@"
+    check_essentials
+    preset_juno
+    defaults
+
+    if [ -z $debugmode ];
+    then
+		show_metadata
+		action
+    else
+		show_metadata
+    fi
+}
+
+# script execution call goes here
+main "$@"
