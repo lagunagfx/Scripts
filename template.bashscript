@@ -1,0 +1,127 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# This is a brief description of my script
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ChangeLog:
+# 2020.02.03 | 1st revision of this template
+# 2021.11.12 | Refactoring all scattered changes into this format
+#
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings:
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="0.1"
+
+# ---------------------------------------------------------------------------------------
+#  Standard functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "   -h,   --help           show this help message\n"
+	printf "         --debug          developer's mode\n"
+}
+
+version() {
+	printf "\e[33m%s\e[0m version \e[33em%s\e[0m.\n" $SCRIPT_NAME $SCRIPT_VERSION
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"-v"|"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					DEBUG="YES"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  User Defined Functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEBUG="NO" # Debug Mode is turned off by default
+}
+
+user_args() {
+	case $1 in
+		# insert user defined parameters
+		"-v"|"--verbose")
+			VERBOSE="YES"
+			;;
+	esac
+}
+
+action() {
+	if [ "$DEBUG"=="NO" ];
+	then
+		echo "A line that test an empty script"
+		# Do Something !!!
+	else
+		printf "\e[31m-!>\e[0m Running in \e[31mDEBUG\e[0m mode\n\n" $SCRIPT_NAME
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main block
+# ---------------------------------------------------------------------------------------
+
+main() {
+	# prerequisites of the script to be checked BEFORE any argument evalutation
+	check_args "$@"
+	defaults
+	# Execute standard OR debug version of the script
+	if [ -z $debugmode ];
+	then
+			version
+			actions
+	else
+		printf "\e[1m-!>\e[0m script %s running in DEBUG mode:\n" $scriptname
+		# script actions according to its arguments
+		printf "\e[1m-->\e[0m script %s alternate version.\n" $scriptname
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main call
+# ---------------------------------------------------------------------------------------
+
+main "$@"
