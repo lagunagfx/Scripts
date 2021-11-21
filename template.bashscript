@@ -13,7 +13,7 @@
 # ChangeLog:
 # 2020.02.03 | 1st revision of this template
 # 2021.11.12 | Refactoring all scattered changes into this format
-#
+# 2021.11.21 | Further refactoring of "standard" base functions
 #
 # ---------------------------------------------------------------------------------------
 #  Variables and Settings
@@ -23,13 +23,15 @@ SCRIPT_NAME=$( basename $0 )
 SCRIPT_VERSION="0.1"
 
 # ---------------------------------------------------------------------------------------
-#  Standard functions
+#  Base functions
 # ---------------------------------------------------------------------------------------
 
 usage() {
 	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "         --debug          developer mode\n"
 	printf "   -h,   --help           show this help message\n"
-	printf "         --debug          developer's mode\n"
+	printf "   -v,   --verbose        verbose mode\n"
+	printf "         --version        show current version\n"
 }
 
 version() {
@@ -53,7 +55,7 @@ check_args() {
 					usage
 					exit 0
 					;;
-				"-v"|"--version")
+				"--version")
 					version
 					exit 0
 					;;
@@ -88,8 +90,17 @@ user_args() {
 	esac
 }
 
+check_essentials() {
+	if [ -z "$INPUT" ];
+	then
+		printf "\e[31-!> ERROR:\e[0m A source file must be specified\n"
+		exit 1
+	fi
+}
+
 action() {
-	if [ "$DEBUG"=="NO" ];
+	# Execute standard OR debug version of the script
+	if [ "$DEBUG" == "NO" ];
 	then
 		echo "A line that test an empty script"
 		# Do Something !!!
@@ -104,18 +115,11 @@ action() {
 
 main() {
 	# prerequisites of the script to be checked BEFORE any argument evalutation
-	check_args "$@"
 	defaults
-	# Execute standard OR debug version of the script
-	if [ -z $debugmode ];
-	then
-			version
-			actions
-	else
-		printf "\e[1m-!>\e[0m script %s running in DEBUG mode:\n" $scriptname
-		# script actions according to its arguments
-		printf "\e[1m-->\e[0m script %s alternate version.\n" $scriptname
-	fi
+	check_args "$@"
+	check_essentials
+	version
+	action
 }
 
 # ---------------------------------------------------------------------------------------
