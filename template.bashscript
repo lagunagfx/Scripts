@@ -10,10 +10,13 @@
 # Author:
 # Jorge Barrientos Poisson
 #
-# ChangeLog:
-# 2020.02.03 | 1st revision of this template
-# 2021.11.12 | Refactoring all scattered changes into this format
-# 2021.11.21 | Further refactoring of "standard" base functions
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+#  2020.02.03 | 1st revision of this template
+#  2021.11.12 | Refactoring all scattered changes into this format
+#  2021.11.21 | Further refactoring of "standard" base functions
 #
 # ---------------------------------------------------------------------------------------
 #  Variables and Settings
@@ -74,7 +77,7 @@ check_args() {
 }
 
 # ---------------------------------------------------------------------------------------
-#  User Defined Functions
+#  Standard Functions
 # ---------------------------------------------------------------------------------------
 
 defaults() {
@@ -85,7 +88,6 @@ defaults() {
 }
 
 user_args() {
-
 	case $1 in
 		# insert user defined parameters
 		"-v"|"--verbose")
@@ -126,6 +128,11 @@ action() {
 }
 
 # ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------------------
 #  Main block
 # ---------------------------------------------------------------------------------------
 
@@ -133,6 +140,7 @@ main() {
 	check_args "$@"
 	defaults
 	check_essentials
+	# build_syntax
 	version
 	action
 }

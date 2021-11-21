@@ -1,0 +1,193 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# A simple script to manage verbose boot mode through the NVRAM on macOS
+# Note that the script does not handle other boot parameters other than '-v'
+#
+# Author:
+# Jorge Barrientos
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+# 
+#  2019.12.07 | 1st version tested on macOS Mojave 10.14.6 running bash
+#  2021.11.21 | Complete refactoring using the current script template
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="0.3"
+
+# ---------------------------------------------------------------------------------------
+#  Base functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+	printf "usage: %s [-chlu]\n" $SCRIPT_NAME
+	printf "   -c,   --clean             remove Macports sources and unused packages\n"
+	printf "   -h,   --help              show this help message\n"
+	printf "   -l,   --list              list all installed Macports packages\n"
+	printf "   -u,   --update            update port definitions and outdated packages\n"
+}
+
+version() {
+	printf "* \e[33m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					DEBUG="YES"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Standard functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEFAULT_DEBUG="NO"
+
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+}
+
+user_args() {
+	case "$1" in
+		"--migrate")
+			ACTION="MIGRATE"
+			;;
+		"-u"|"--update")
+			ACTION="UPDATE"
+			;;
+		"-c"|"--clean")
+			ACTION="CLEAN"
+			;;
+		"-l"|"--list")
+			ACTION="LIST"
+			;;		
+	esac
+}
+
+check_essentials() {
+	# Check if we're running on a Macintosh
+	if [ "$( uname -s )" != "Darwin" ];
+	then
+		printf "\e[31m-!->\e[0m  This program only should be run under macOS\n"
+		exit 1
+	else
+		if [ -z $( which port ) ];
+		then
+			printf "\e[31m-!->\e[0m  Macports executable not found\e[0m\n"
+			exit 1
+		fi
+	fi
+}
+
+action() {
+	case "$ACTION" in
+		"CLEAN")
+			macports_clean
+			;;
+		"LIST")
+			macports_list
+			;;
+		"UPDATE")
+			macports_update
+			;;
+	esac
+}
+
+# ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+
+macports_clean() {
+	printf "\e[33m--->\e[0m  Cleaning Macports downloaded sources and unused packages ...\n"
+	printf "\e[33m--->\e[0m  Disk used before cleaning : %s\n" $( du -sh /opt | cut -f 1 ) 
+	sudo port clean --all installed && sudo port -f uninstall inactive
+	printf "\e[33m--->\e[0m  Disk used after cleaning : %s\n" $( du -sh /opt | cut -f 1 ) 
+}
+
+macports_list() {
+	printf "\e[33m--->\e[0m  Currently ACTIVE packages : \n"
+	sudo port installed active
+	printf "\e[33m--->\e[0m  Currently INACTIVE packages : \n"
+	sudo port installed inactive
+}
+
+macports_migrate() {
+	# save the list of installed ports
+	printf "\e[33m--->\e[0m  Saving the list of \e[38minstalled\e[0m ports\n"
+	port -qv installed > macports-installed.txt
+	# save the list of requested ports
+	printf "\e[33m--->\e[0m  Saving the list of \e[38mrequested\e[0m ports\n"
+	port echo requested | cut -d ' ' -f 1 | uniq > macports-requested.txt
+	# uninstall all installed ports
+	printf "\e[33m--->\e[0m  Uninstalling \e[38mall installed\e[0m ports\n"
+	sudo port uninstall
+	# run a regular cleanout of the installation
+	printf "\e[33m--->\e[0m  Run a \e[38mregular cleanout\e[0m ports\n\n"
+	sudo port reclaim
+	# Download and execute the restore-ports script
+	curl --location --remote-name https://github.com/macports/macports-contrib/raw/master/restore_ports/restore_ports.tcl
+	chmod +x restore_ports.tcl
+	#xattr -d com.apple.quarantine restore_ports.tcl
+	sudo ./restore_ports.tcl macports-installed.txt
+}
+
+macports_update() {
+	printf "\e[33m--->\e[0m  Updating port definitions and outdated packages ...\n"
+	sudo port selfupdate && sudo port upgrade outdated
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main blocks
+# ---------------------------------------------------------------------------------------
+
+main() {
+	check_args "$@"
+	check_essentials
+	version
+	action
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main call
+# ---------------------------------------------------------------------------------------
+
+main "$@"
