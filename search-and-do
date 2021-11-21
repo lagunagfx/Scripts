@@ -147,9 +147,6 @@ actions() {
 	fi
 }
 
-# MAIN and DEBUG versions separated so it's possible to "try new things" inside debug()
-# while retaining the last working code writeup in main()  
-
 main() {
 	# prerequisites of the script to be checked BEFORE any argument evalutation
 	defaults
@@ -164,5 +161,4 @@ main() {
 	fi
 }
 
-# script execution call goes here
 main "$@"

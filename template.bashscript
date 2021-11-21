@@ -20,7 +20,7 @@
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
-SCRIPT_VERSION="0.1"
+SCRIPT_VERSION="0.2"
 
 # ---------------------------------------------------------------------------------------
 #  Base functions
@@ -35,7 +35,7 @@ usage() {
 }
 
 version() {
-	printf "\e[33m%s\e[0m version \e[33m%s\e[0m.\n" $SCRIPT_NAME $SCRIPT_VERSION
+	printf "* \e[33m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
 }
 
 check_args() {
@@ -78,23 +78,39 @@ check_args() {
 # ---------------------------------------------------------------------------------------
 
 defaults() {
-	DEBUG="NO" # Debug Mode is turned off by default
+	DEFAULT_DEBUG="NO"
+	
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
 }
 
 user_args() {
+
 	case $1 in
 		# insert user defined parameters
 		"-v"|"--verbose")
 			VERBOSE="YES"
 			;;
+		*)
+			if [ $# -eq 1 ];
+			then
+				LAST_ARGUMENT="$1"		
+			fi
+			;;
 	esac
 }
 
 check_essentials() {
-	if [ -z "$INPUT" ];
+	if [ -z "$LAST_ARGUMENT" ];
 	then
-		printf "\e[31-!> ERROR:\e[0m A source file must be specified\n"
+		printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
 		exit 1
+	else
+		if [ ! -r "$LAST_ARGUMENT" ];
+		then
+			printf "\e[31m-!>\e[0m File not found or not readable : \e[31m%s\e[0m\n" $LAST_ARGUMENT
+			exit 1
+		fi
 	fi
 }
 
@@ -114,9 +130,8 @@ action() {
 # ---------------------------------------------------------------------------------------
 
 main() {
-	# prerequisites of the script to be checked BEFORE any argument evalutation
-	defaults
 	check_args "$@"
+	defaults
 	check_essentials
 	version
 	action

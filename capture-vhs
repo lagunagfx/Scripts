@@ -33,21 +33,21 @@ usage() {
 
 check_basics() {
     case "$ACTION" in
-	"capture")
-	    # Check if some valid capture time has been specified
-	    if [ -z "$DURATION" ];
-	    then
-		printf "\e[31mERROR:\e[0m A valid capture time must be specified.\n"
-		exit 1
-	    fi
-	    ;;
-	"mux")
-	    if [ -z "$OUTPUT" ];
-	    then
-		printf "\e[31mERROR:\e[0m An output file name must be specified.\n"
-		exit 1
-	    fi
-	    ;;
+		"capture")
+			# Check if some valid capture time has been specified
+			if [ -z "$DURATION" ];
+			then
+				printf "\e[31mERROR:\e[0m A valid capture time must be specified.\n"
+				exit 1
+			fi
+			;;
+		"mux")
+			if [ -z "$OUTPUT" ];
+			then
+				printf "\e[31mERROR:\e[0m An output file name must be specified.\n"
+				exit 1
+			fi
+			;;
     esac
 }
 
@@ -60,23 +60,23 @@ defaults() {
     default_cleanaftermuxing="no"
 
     case "$ACTION" in
-	"capture")
-	    [ -z $OUTPUT ] && OUTPUT="$default_capture_output"
-	    ;;
-	"demux_audio")
-	    [ -z $INPUT ] && INPUT="$default_capture_output" 
-	    [ -z $OUTPUT ] && OUTPUT="$default_demuxaudio_output"
-	    ;;	    
-	"demux_video")
-	    [ -z $INPUT ] && INPUT="$default_capture_output" 
-	    [ -z $OUTPUT ] && OUTPUT="$default_demuxvideo_output"
-	    ;;
-	"mux")
-	    [ -z $INPUT_AUDIO ] && INPUT_AUDIO="$default_demuxaudio_output"
-	    [ -z $INPUT_VIDEO ] && INPUT_VIDEO="$default_demuxvideo_output" 
-	    [ -z $TITLE ] && TITLE="$default_metadata_title"
-	    [ -z $CLEAN_AFTER_MUXING] && CLEAN_AFTER_MUXING="$default_cleanaftermuxing"
-	    ;;	    
+		"capture")
+			[ -z $OUTPUT ] && OUTPUT="$default_capture_output"
+			;;
+		"demux_audio")
+			[ -z $INPUT ] && INPUT="$default_capture_output" 
+			[ -z $OUTPUT ] && OUTPUT="$default_demuxaudio_output"
+			;;	    
+		"demux_video")
+			[ -z $INPUT ] && INPUT="$default_capture_output" 
+			[ -z $OUTPUT ] && OUTPUT="$default_demuxvideo_output"
+			;;
+		"mux")
+			[ -z $INPUT_AUDIO ] && INPUT_AUDIO="$default_demuxaudio_output"
+			[ -z $INPUT_VIDEO ] && INPUT_VIDEO="$default_demuxvideo_output" 
+			[ -z $TITLE ] && TITLE="$default_metadata_title"
+			[ -z $CLEAN_AFTER_MUXING] && CLEAN_AFTER_MUXING="$default_cleanaftermuxing"
+			;;	    
     esac
 } 
 
@@ -112,68 +112,68 @@ mux() {
 
 action() {
     case $ACTION in
-	"capture")
-	    capture
-	    ;;
-	"demux_audio")
-	    demux_audio
-	    ;;
-	"demux_video")
-	    demux_video
-	    ;;
-	"mux")
-	    mux
-	    ;;
+		"capture")
+			capture
+			;;
+		"demux_audio")
+			demux_audio
+			;;
+		"demux_video")
+			demux_video
+			;;
+		"mux")
+			mux
+			;;
     esac
 }
 
 user_args() {
     case $1 in
-	"-i"|"--input")
-	    INPUT="$2"
-	    if [ -z "$2" ];
-	    then
-		printf "\e[31mERROR:\e[0m A valid file name must be provided"
-		exit 1
-	    fi
-	    ;;
-	"-o"|"--output")
-	    OUTPUT="$2"
-	    if [ -z "$2" ];
-	    then
-		printf "\e[31mERROR:\e[0m A valid file name must be provided"
-		exit 1
-	    fi
-	    ;;
-	"-t"|"--time")
-	    DURATION="$2"
-	    ;;
-	"-c"|"--capture")
-	    ACTION="capture"
-	    ;;
-	"--da"|"--demux-audio")
-	    ACTION="demux_audio"
-	    ;;
-	"--dv"|"--demux-video")
-	    ACTION="demux_video"
-	    ;;
-	"-m"|"--mux")
-	    ACTION="mux"
-	    ;;
-	"--title")
-	    TITLE="$2"
-	    ;;
-	"--delete")
-	    CLEAN_AFTER_MUXING="yes"
-	    ;; 
+		"-i"|"--input")
+			INPUT="$2"
+			if [ -z "$2" ];
+			then
+				printf "\e[31mERROR:\e[0m A valid file name must be provided"
+				exit 1
+			fi
+			;;
+		"-o"|"--output")
+			OUTPUT="$2"
+			if [ -z "$2" ];
+			then
+				printf "\e[31mERROR:\e[0m A valid file name must be provided"
+				exit 1
+			fi
+			;;
+		"-t"|"--time")
+			DURATION="$2"
+			;;
+		"-c"|"--capture")
+			ACTION="capture"
+			;;
+		"--da"|"--demux-audio")
+			ACTION="demux_audio"
+			;;
+		"--dv"|"--demux-video")
+			ACTION="demux_video"
+			;;
+		"-m"|"--mux")
+			ACTION="mux"
+			;;
+		"--title")
+			TITLE="$2"
+			;;
+		"--delete")
+			CLEAN_AFTER_MUXING="yes"
+			;; 
     esac
 }
 
 check_args() {
     if [ $# -eq 0 ];
     then
-	# script is called with zero arguments 
-	usage
+		# script is called with zero arguments 
+		usage
 	exit 0
     else
 	# one or more arguments are used
@@ -208,10 +208,10 @@ main() {
     # Execute standard OR debug version of the script
     if [ -z $debugmode ];
     then
-	action
+		action
     else
-	printf "\e[1m-!>\e[0m script %s running in DEBUG mode:\n" $scriptname
-	# script actions according to its arguments
+		printf "\e[1m-!>\e[0m script %s running in DEBUG mode:\n" $scriptname
+		# script actions according to its arguments
     fi
 }
 
