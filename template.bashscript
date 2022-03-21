@@ -17,13 +17,14 @@
 #  2020.02.03 | 1st revision of this template
 #  2021.11.12 | Refactoring all scattered changes into this format
 #  2021.11.21 | Further refactoring of "standard" base functions
+#  2022.03.20 | Improved colors, output, versioning and pseudo-boolean types
 #
 # ---------------------------------------------------------------------------------------
 #  Variables and Settings
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
-SCRIPT_VERSION="0.2"
+SCRIPT_VERSION="2022.03.20"
 
 # ---------------------------------------------------------------------------------------
 #  Base functions
@@ -63,7 +64,7 @@ check_args() {
 					exit 0
 					;;
 				"--debug")
-					DEBUG="YES"
+					DEBUG="TRUE"
 					;;
 				# all user defined opts handled by user_args
 				*)
@@ -81,17 +82,19 @@ check_args() {
 # ---------------------------------------------------------------------------------------
 
 defaults() {
-	DEFAULT_DEBUG="NO"
-	
+	DEFAULT_DEBUG="FALSE"
+	DEFAULT_LAST_ARGUMENT_NEEDED="FALSE"
+
 	# conditional oneliners ( if/then/else == []/&&/|| )
 	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="DEFAULT_LAST_ARGUMENT_NEEDED"
 }
 
 user_args() {
 	case $1 in
 		# insert user defined parameters
 		"-v"|"--verbose")
-			VERBOSE="YES"
+			VERBOSE="TRUE"
 			;;
 		*)
 			if [ $# -eq 1 ];
@@ -118,7 +121,7 @@ check_essentials() {
 
 action() {
 	# Execute standard OR debug version of the script
-	if [ "$DEBUG" == "NO" ];
+	if [ "$DEBUG" == "FALSE" ];
 	then
 		echo "A line that test an empty script"
 		# Do Something !!!

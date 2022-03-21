@@ -1,0 +1,470 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# Download images from various porn gallery sites, automagically
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+#  2019.12.15 | Added fastpics.eu support	
+#  2020.03.19 | Added various domain handlers, plus extensive refactoring 
+#  2020.04.23 | Added galleries.payserve.com support
+#  2022.03.19 | General refactoring, plus "--prefix" option
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="2022.03.19"
+
+logfile="gallery.log"
+
+# ---------------------------------------------------------------------------------------
+#  Base functions
+# ---------------------------------------------------------------------------------------
+	
+usage() {
+	printf "usage: %s [option] <URL or LISTOFURLS.TEXT>\n" $SCRIPT_NAME
+	printf "         --debug          developer mode\n"
+	printf "   -h,   --help           show this help message\n"
+	printf "   -v,   --verbose        verbose mode\n"
+	printf "         --version        show current version\n"
+	printf "   -l,   --list           use urls from a plain text file\n"
+	printf "         --html           extract urls from an html file\n"
+	printf "   -p,   --prefix         add a string BEFORE de filename\n"
+}
+
+version() {
+	printf "* \e[33m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					DEBUG="true"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Standard Functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEFAULT_DEBUG="FALSE"
+	DEFAULT_REQUIRE_LAST_ARG="FALSE"
+	
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z $LAST_ARGUMENT_NEEDED ] && REQUIRE_LAST_ARG="$DEFAULT_LAST_ARGUMENT_NEEDED"
+}
+
+user_args() {
+	case $1 in
+		# insert user defined parameters
+		"-l"|"--list")
+			[ -r "$2" ] && handler_list "$( cat $2 )"
+			exit 0
+			;;
+		"--log")
+			[ ! -z $2 ] && logfile="$2"
+			;;
+		"--html")
+			[ -r "$2" ] && handler_htmlfile $2
+			listfile=$( basename $2 .html )
+			;;	
+		"-p"|"--prefix")
+			[ ! -z $2 ] && FILENAME_PREFIX="$2"
+			;;
+		"-v"|"--verbose")
+			VERBOSE="YES"
+			;;
+		*)
+			if [ $# -eq 1 ];
+			then
+				LAST_ARGUMENT="$1"		
+				URL="$LAST_ARGUMENT"
+				ACTION="HANDLE_URL"
+			fi
+			#domain_handler "$1"
+			;;
+	esac
+}
+
+check_essentials() {
+	if [ -z "$LAST_ARGUMENT" ];
+	then
+		printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
+		exit 1
+#	else
+#		if [ ! -r "$LAST_ARGUMENT" ];
+#		then
+#			printf "\e[31m-!>\e[0m File not found or not readable : \e[31m%s\e[0m\n" $LAST_ARGUMENT
+#			exit 1
+#		fi
+	fi
+
+
+}
+
+action() {
+	# Execute standard OR debug version of the script
+	if [ "$DEBUG" == "FALSE" ];
+	then
+		case $ACTION in
+			"HANDLE_URL")
+				domain_handler "$URL"
+				exit 0
+				;;
+		esac
+	else
+		printf "\e[31m-!>\e[0m Running in \e[31mDEBUG\e[0m mode\n\n" $SCRIPT_NAME
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+
+filename() {
+	FILENAME=$( echo "$1" | rev | cut -d "/" -f 1 | sed 's/\"//g' | rev )
+
+	if [ ! -z "$FILENAME_PREFIX" ];
+	then
+		FILENAME=$FILENAME_PREFIX"_"$FILENAME
+	fi
+	
+	echo "$FILENAME"
+}
+
+save() {
+	while [ "$1" ];
+	do
+		case $1 in
+			"-u"|"--url")
+				saveurl="$2"
+				;;
+			"-n"|"--name")
+				savename="$2"
+				;;
+		esac
+		shift
+	done
+	
+	if [ -z $savename ];
+	then
+		wget -nc $saveurl
+	else
+		wget -nc $saveurl -O $savename
+		printf "\e[31m-->\e[0m Saving file to \e[31m%s\e[0m\n\n" $savename
+	fi	
+}
+
+handler_list() {	
+	for i in $@ ;
+	do
+		# recursively call this script to handle single links in a list
+		$SCRIPT_NAME $i						
+		printf "%s\n" $i >> $logfile
+	done
+}
+
+handler_htmlfile() {
+	URL=$( cat $1 | grep thumbwook | grep href | tr ' ' '\n' | grep ^href | cut -d '"' -f 2 )
+	#echo $URL > $listfile
+	handler_list $URL	
+}
+
+domain_handler() {
+
+	DOMAIN=$( echo $1 | cut -d '/' -f 3 )
+
+	case "$DOMAIN" in
+		"www.pornpics.com")
+			handler_wwwpornpicscom $1
+			;;
+		"join.vipissy.com")
+			handler_vipissy $1
+			;;
+		"galleries.allover30.com"|"join.allover30.com")
+			handler_allover30 $1
+			;;
+		"fastpics.eu")
+			handler_fastpicseu $1
+			;;
+		"html.sxx.com")
+			handler_sxx $1
+			;;
+		"free.perfectgonzo.com"|"free.asstraffic.com")
+			handler_perfectgonzo $1
+			;;
+		"enter.private.com")
+			handler_private $1
+			;;
+		"galleriesPXN.stiffia.com")
+			handler_stiffia $1
+			;;
+		"join.milfsodomy.com")
+			handler_milfsodomy $1
+			;;
+		"galleries.nubiles.net")
+			handler_nubiles $1
+			;;
+		"galleries.payserve.com")
+			handler_payserve $1
+			;;
+		"galleries.taincash.com")
+			handler_taincash $1
+			;;
+		"register.pissinghd.com")
+			handler_pissinghd $1
+			;;
+		"enter.privateclassics.com")
+			handler_privateclassics $1
+			;;
+		*)
+			printf "\e[1m-->\e[0m \e[33mERROR\e[0m: No handler for \e[33m%s\e[0m.\n\n" $1
+			if [ "$( curl -s -L $1 )" == "Wrong template of the gallery." ];
+			then
+				printf "Invalid: " >> $logfile
+			else
+				printf "NoHandler: " >> $logfile
+			fi
+	esac
+}
+
+handler_wwwpornpicscom() {
+
+	SUBDOMAIN=$( echo $1 | cut -d '/' -f 4 )
+
+	case $SUBDOMAIN in
+		"galleries")
+			URL=$( curl -s $1 | grep href | grep .jpg | tr ' ' '\n' | grep ^href | grep -i .jpg | cut -d = -f 2 | tr -d \' | tr -d \" )
+			if [ ! -z "$URL" ];
+			then
+				echo "$URL" | while IFS="\n" read i
+				do
+					wget -nc "$i" -O $( filename "$i" )
+				done
+				# wget -nc $URL
+			else
+				[ ! -z "$( curl -s $1 | grep 404 )" ] && printf "\n\e[1m-->\e[0m \e[33mERROR: 404 Page Not Found\e[0m.\n\n"
+			fi 
+			;;
+		*)
+			URL=$( curl -s $1 | grep href | tr ' ' '\n' | grep ^href | cut -d \' -f 2 | grep ^http )
+			handler_list $URL
+			;;
+	esac
+}
+
+handler_vipissy() {
+
+	URL=$( curl -s -L $1 | grep href | grep .jpg | cut -d '"' -f 2 | tr '\n' ' ' ) 
+	ref=$( echo $URL | cut -d '/' -f 4 )
+
+	for i in $URL;
+	do
+		n=$( printf "%02d" $( basename $i .jpg ) )
+		final="vp_"$ref"_"$n".jpg"
+		save -u "https://www.vipissy.com"$i -n $final		 
+	done
+}
+
+handler_fastpicseu() {
+	# generate a multiple url with each file separated by spaces
+	URL=$( curl $1 | grep href | grep .jpg | tr ' ' '\n' | grep "^href" | cut -d '=' -f 2 | cut -d '>' -f 1 | sed 's/\"//g' | tr '\n' ' ' )
+	wget -nc $URL	
+}
+
+
+handler_allover30() {
+	# it does NOT handle redirections
+	GROUP=$( curl -L $1 | grep href | grep .jpg | cut -d '=' -f 3 | cut -d ' ' -f 1 | sed 's/\"//g' | sed '/^\// d' ) 
+	for ITEM in $GROUP;
+	do
+		save -u $URL$ITEM
+	done
+}
+
+handler_sxx() {
+	URL=$( curl --silent $1 | grep href | cut -d '"' -f 2 | grep -i .jpg | tr '\n' ' ' )
+	wget -nc $URL 	
+}
+
+handler_perfectgonzo() {
+
+	ref=$( echo $1 | rev | cut -d '/' -f 2 | rev ) 
+	URL=$( curl -s -L $1 |  grep href | grep .jpg | cut -d ' ' -f 2 | cut -d '"' -f 2 | tr '\n' ' ' )
+
+	for i in $URL;
+	do
+		n=$( basename $i .jpg ) 
+		[ $n -lt 10 ] && n="0"$n
+		final=$ref"_"$n".jpg"
+		save -u $i -n $final
+	done
+}
+
+handler_private() {
+
+	URL=$( curl -s -L $1 | grep href | grep .jpg | cut -d ' ' -f 3 | cut -d '"' -f 2 | tr '\' ' ' )
+
+	for item in $URL;
+	do
+		reference=$( echo $item | cut -d '/' -f 4 )
+		file=$( echo $item | rev | cut -d '/' -f 1 | rev ) 
+		finalname=$reference"_"$file
+		save -u $item -n $finalname
+	done
+}
+
+handler_stiffia() {
+
+	url_part1=$( echo $1 | cut -d '?' -f 1 )
+	reference=$( echo $url_part1 | rev | cut -d '/' -f 2 | rev )e
+	
+	URL=$( curl -s $1 | grep href | grep .JPG | cut -d '"' -f 2 | sed 's/^\.\///g' )
+	for url_part2 in $URL;
+	do
+		n=$( basename $url_part2 .JPG )
+		finalname=$reference"_"$n".jpg"
+		save -u $url_part1$url_part2 -n $finalname
+	done	
+}
+
+handler_milfsodomy() {
+	
+	URL=$( curl -s -L $1 | grep href | grep .jpg | cut -d '"' -f 2 )
+	
+	for i in $URL;
+	do
+		file=$( echo $i | rev | cut -d '/' -f 1 | rev )
+		reference=$( echo $i | rev | cut -d '/' -f 2 | rev )
+		final="msdm_g"$reference"_"$file
+		save -u "http://milfsodomy.com"$i -n "$final"
+	done
+}
+
+handler_nubiles() {
+	
+	URL=$( curl -s -L $1 | grep href | grep .jpg | tr ' ' '\n' |  grep ^href | cut -d '"' -f 2 ) 
+	ref=$( echo $URL | cut -d '/' -f 6 ) 
+
+	for i in $URL;
+	do
+		n=$( basename $i .jpg )
+		final="nubiles_"$ref"_"$n".jpg"
+		save -u $i -n $final
+	done
+}
+
+handler_payserve() {
+
+	URL=$( curl -s -L $1 --dump-header - | grep Location | cut -d ' ' -f 2 | sed 's///g' )	
+	$SCRIPT_NAME $URL
+}
+
+handler_taincash() {
+
+	URL1=$( dirname $1 )
+	URL2=$( curl -s $1 | grep href | tr ' ' '\n' |  grep ^href | grep .jpg | cut -d '"' -f 2 ) 
+	ref=$( echo $URL1 | cut -d '/' -f 6 ) 
+
+	for i in $URL2
+	do
+		n=$( basename $i .jpg )
+		[ $n -lt 10 ] && n="0"$n
+		final="taincash_"$ref"_"$n".jpg"
+		save -u $URL1"/"$i -n $final
+	done
+}
+
+handler_pissinghd() {
+
+	URL=$( curl -s -L $1 | grep href | grep .jpg | tr ' ' '\n' | grep ^href | grep .jpg | cut -d '"' -f 2 )
+	ref=$( echo $1 | rev | cut -d '.' -f 4 | rev ) 
+	
+	for i in $URL
+	do
+		n=$( basename $i .jpg )
+		if [ $( printf "%s" $n | wc -m ) -lt 3 ];
+		then
+			[ $n -lt 10 ] && n="0"$n
+			final="pissinghd_"$ref"_"$n".jpg"
+			save -u $i -n $final
+		else
+			wget -nc $URL
+		fi
+	done
+}
+
+handler_privateclassics() {
+
+	REDIRECT=$( curl -s -L $1 --dump-header - | grep Location | grep http:// | cut -d ' ' -f 2 | sed 's///g' | cut -d '?' -f 1 ) 
+	URL=$( curl -s -L $REDIRECT | grep href | grep .jpg | tr ' ' '\n' | grep ^href | grep .jpg | cut -d '"' -f 2 )
+	ref=$( echo $URL | rev | cut -d '/' -f 3 | rev ) 
+	
+	for i in $URL
+	do
+		n=$( basename $i .jpg )
+		final="privateclassic_"$ref"_"$n".jpg"
+		save -u $i -n $final
+	done
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main block
+# ---------------------------------------------------------------------------------------
+
+main() {
+	check_args "$@"
+	defaults
+	check_essentials
+	# build_syntax
+	version
+	action
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main call
+# ---------------------------------------------------------------------------------------
+
+main "$@"
