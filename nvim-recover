@@ -1,0 +1,212 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# Quick script that integrates the changes stored in NVIM's swap files
+# and then discards them
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+#  2022.10.01 | 1st sketch
+#  2022.10.02 | Improving error handling and self help
+#
+# ---------------------------------------------------------------------------------------
+#  Known Issues
+# ---------------------------------------------------------------------------------------
+#
+#  SWAP_LIST includes all swap files separated by SPACES, so spaces within the filenames
+#  could be problematic and is not properly handled yet
+#     
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="2022.10.02"
+
+# ---------------------------------------------------------------------------------------
+#  Base functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+	printf "usage: %s [OPTION]\n" $SCRIPT_NAME
+	printf "   -h,   --help           show this help message\n"
+	printf "   -v,   --verbose        verbose mode\n"
+	printf "   -l,   --list           shows all swap files present\n"
+	printf "   -r,   --recover        integrates changes from swap files\n"
+	printf "   -k,   --keep           don't delete swap files after recovery\n"
+	printf "         --version        show current version\n"
+}
+
+version() {
+	printf "\e[33m--> \e[36m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					DEBUG="TRUE"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Standard Functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEFAULT_DEBUG="FALSE"
+	DEFAULT_LAST_ARGUMENT_NEEDED="FALSE"
+
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="DEFAULT_LAST_ARGUMENT_NEEDED"
+
+	# user defined defaults
+	DEFAULT_DELETE="TRUE"
+	[ -z $DELETE ] && DELETE="$DEFAULT_DELETE"
+	SWAP_FOLDER="$HOME/.local/share/nvim/swap"
+}
+
+user_args() {
+	case $1 in
+		# insert user defined parameters
+		"-v"|"--verbose")
+			VERBOSE="TRUE"
+			;;
+		"-l"|"--list")
+			ACTION="list"
+			;;
+		"-r"|"--recover")
+			ACTION="recover"
+			;;
+		"-k"|"--keep-swapfiles")
+			DELETE="FALSE"
+			;;
+		*)
+			[ $# -eq 1 ] && LAST_ARGUMENT="$1"		
+			printf "\e[31m-!>\e[0m Option not recognized: \e[31m%s\e[0m\n\n" $1
+			usage
+			exit 1
+			;;
+	esac
+}
+
+action() {
+	# is DEBUG mode set?
+	if [ "$DEBUG" == "FALSE" ];
+	then
+		# NO, then run the actual script 
+		case $ACTION in
+			"list")
+				swapfile_process
+				;;
+			"recover")
+				RECOVER=TRUE
+				swapfile_process
+				;;
+		esac
+
+	else
+		# YES, then just perform a "dry run" (shows data, does no changes)
+		printf "\e[31m-!>\e[0m Running in \e[31mDEBUG\e[0m mode\n\n" $SCRIPT_NAME
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+
+swapfile_process() {
+
+	# list all swapfiles
+
+	SWAP_LIST=$( find $SWAP_FOLDER -maxdepth 1 -type f -name "*.swp" )
+	SWAP_COUNT=$( echo $SWAP_LIST | tr " " "\n" | wc -l )
+	
+	printf "\e[33m-->\e[0m " 
+
+	if [ $SWAP_COUNT -eq 0 ];
+	then
+		printf "No"
+	else
+		printf "\e[32m%i\e[0m" $SWAP_COUNT
+	fi
+			
+	printf " swap files present in \e[32m%s\e[0m\n" $SWAP_FOLDER
+
+	# should the swapfile be recovered by nvim?
+
+	if [ "$RECOVER" == "TRUE" ];
+	then
+		for item in $SWAP_LIST;
+		do
+			nvim -r $item
+
+			# should the swapfile be deleted
+
+			case "$DELETE" in
+				"TRUE")
+					rm $item && printf "\e[33m-->\e[0m Swap file %s deleted\n" $item
+					;;
+				"FALSE")
+					printf "\e[33m-->\e[0m Keeping swap file \e[34m%s\e[0m\n" $item
+					;;
+			esac
+		done
+	fi
+
+	exit 0
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main block
+# ---------------------------------------------------------------------------------------
+
+main() {
+	check_args "$@"
+	defaults
+	version
+	action
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main call
+# ---------------------------------------------------------------------------------------
+
+main "$@"
