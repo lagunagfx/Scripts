@@ -24,7 +24,9 @@
 #
 #  SWAP_LIST includes all swap files separated by SPACES, so spaces within the filenames
 #  could be problematic and is not properly handled yet
-#     
+#
+#  VIM files are not handled yet
+#
 # ---------------------------------------------------------------------------------------
 #  Variables and Settings
 # ---------------------------------------------------------------------------------------
