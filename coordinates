@@ -1,0 +1,240 @@
+#!/bin/bash
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# This is a brief description of my script
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+#  2020.10.18 | 1st draft
+#  2021.11.12 | Refactoring all scattered changes into this format
+#  2021.11.21 | Further refactoring of "standard" base functions
+#  2022.03.20 | Improved colors, output, versioning and pseudo-boolean types
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="2022.10.16"
+
+# ---------------------------------------------------------------------------------------
+#  Base functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "         --debug          developer mode\n"
+	printf "   -h,   --help           show this help message\n"
+	printf "   -v,   --verbose        verbose mode\n"
+	printf "         --version        show current version\n"
+	printf "   -c,   --clean          only outputs suitable for .csv creation"
+}
+
+version() {
+	[ "$CLEAN" == "FALSE" ] && printf "\e[33m--> \e[36m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					DEBUG="TRUE"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Standard Functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEFAULT_DEBUG="FALSE"
+	DEFAULT_LAST_ARGUMENT_NEEDED="TRUE"
+	DEFAULT_CLEAN="FALSE"
+
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="DEFAULT_LAST_ARGUMENT_NEEDED"
+	[ -z $CLEAN ] && CLEAN="$DEFAULT_CLEAN"
+}
+
+user_args() {
+	case $1 in
+		# insert user defined parameters
+		"-v"|"--verbose")
+			VERBOSE="TRUE"
+			;;
+		"-c"|"--clean")
+			CLEAN="TRUE"
+			;;
+		"--fix")
+			ACTION="fix_csv"
+			;;
+		*)
+			if [ $# -eq 1 ];
+			then
+				LAST_ARGUMENT="$1"		
+			fi
+			;;
+	esac
+}
+
+check_essentials() {
+	if [ -z "$LAST_ARGUMENT" ];
+	then
+		printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
+		exit 1
+	else
+		if [ ! -r "$LAST_ARGUMENT" ];
+		then
+			printf "\e[31m-!>\e[0m File not found or not readable : \e[31m%s\e[0m\n" $LAST_ARGUMENT
+			exit 1
+		else
+			# is it a valid text file ?
+			if [ "$( file -b "$LAST_ARGUMENT" )" == "UTF-8 Unicode text" ];
+			then
+				[ "$CLEAN" == "FALSE" ]	&& printf "\e[33m-->\e[0m file \e[36m%s\e[0m is a valid UTF-8 encoded file\n" "$LAST_ARGUMENT"
+				COORDINATES_CSV="$LAST_ARGUMENT"
+			else
+				printf "\e[31m-!> ERROR:\e[0m file \e[31m%s\e[0m is not a valid UTF-8 encoded file\n" "$LAST_ARGUMENT"
+				exit 1
+			fi
+		fi
+	fi
+}
+
+action() {
+	# Execute standard OR debug version of the script
+	if [ "$DEBUG" == "FALSE" ];
+	then
+		case $ACTION in 
+			"fix_csv")
+				parse_original_csv
+				exit 0
+				;;
+		esac
+	else
+		printf "\e[31m-!>\e[0m Running in \e[31mDEBUG\e[0m mode\n\n" $SCRIPT_NAME
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+
+capitalize() {
+	printf $1 | head -c 1 | tr [:lower:] [:upper:] ; printf $1 | tail -c +2
+}
+
+format() {
+
+	# first letter of first word is always uppercase
+	capitalize $1
+	# does the string has more than one word
+	if [ $# -gt 1 ];
+	then
+		printf " "
+		# only process succesive words, leaving out the first
+		shift
+
+		for w in $@;
+		do
+			case "$w" in
+				"el"|"la"|"lo"|"los"|"las"|"de"|"del")
+					printf "%s" $w
+					;;
+				*)
+					capitalize $w
+					;;
+			esac
+
+			[ $# -ne 1 ] && printf " "
+
+			shift
+		done
+	fi
+	# end with a carriage jump
+	#echo
+}
+
+parse_original_csv() {
+
+	for i in $( cat "$COORDINATES_CSV" | tr " " "_" );
+	do
+		wp_id_province=$( printf %s $i | cut -d ";" -f 1 )
+		wp_id_number=$( printf %s $i | cut -d ";" -f 2 )
+		wp_name=$( printf %s $i | cut -d ";" -f 3 | tr "_" " " | tr -d "-" | tr [:upper:] [:lower:] )
+
+		wp_name_formatted=$( format $wp_name )
+
+		wp_latitude=$( printf %s $i | cut -d ";" -f 4 )
+		wp_lat_sign=$( printf %s $wp_latitude | cut -d _ -f 4 )
+		wp_lat_deg=$( printf %s $wp_latitude | cut -d _ -f 1 | tr -d "º" | sed 's/^0*//' )
+		wp_lat_min=$( printf %s $wp_latitude | cut -d _ -f 2 | tr -d "'" | sed 's/^0*//' )
+		wp_lat_sec=$( printf %s $wp_latitude | cut -d _ -f 3 | tr -d "'" | sed 's/^0*//' )	
+
+		wp_longitude=$( printf %s $i | cut -d ";" -f 5 )
+		wp_lon_sign=$( printf %s $wp_longitude | cut -d _ -f 4 )
+		wp_lon_deg=$( printf %s $wp_longitude | cut -d _ -f 1 | tr -d "º" | sed 's/^0*//' )
+		wp_lon_min=$( printf %s $wp_longitude | cut -d _ -f 2 | tr -d "'" | sed 's/^0*//' )
+		wp_lon_sec=$( printf %s $wp_longitude | cut -d _ -f 3 | tr -d "'" | sed 's/^0*//' )	
+
+		printf "\"%s%s\";\"%s\";" $wp_id_province $wp_id_number "$wp_name_formatted" 
+		printf "\"%s\";%d;%d;%d;" $wp_lat_sign $wp_lat_deg $wp_lat_min $wp_lat_sec
+		printf "\"%s\";%d;%d;%d\n" $wp_lon_sign $wp_lon_deg $wp_lon_min $wp_lon_sec
+	done
+}
+
+
+# ---------------------------------------------------------------------------------------
+#  Main block
+# ---------------------------------------------------------------------------------------
+
+main() {
+	check_args "$@"
+	defaults
+	check_essentials
+	version
+	action
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main call
+# ---------------------------------------------------------------------------------------
+
+main "$@"
