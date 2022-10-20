@@ -14,17 +14,15 @@
 #  ChangeLog
 # ---------------------------------------------------------------------------------------
 #
-#  2020.10.18 | 1st draft
-#  2021.11.12 | Refactoring all scattered changes into this format
-#  2021.11.21 | Further refactoring of "standard" base functions
-#  2022.03.20 | Improved colors, output, versioning and pseudo-boolean types
+#  2022.10.19 | The "--fix" option is complete, which formatted the original .csv data
+#  2022.10.18 | 1st draft
 #
 # ---------------------------------------------------------------------------------------
 #  Variables and Settings
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
-SCRIPT_VERSION="2022.10.16"
+SCRIPT_VERSION="2022.10.19"
 
 # ---------------------------------------------------------------------------------------
 #  Base functions
@@ -37,6 +35,8 @@ usage() {
 	printf "   -v,   --verbose        verbose mode\n"
 	printf "         --version        show current version\n"
 	printf "   -c,   --clean          only outputs suitable for .csv creation"
+	printf "         --fix            extract data from the original .csv (1st step)" 
+	printf "   -g,   --gpx            parse a formatted .csv file into GPS eXchange format (.gpx)" 
 }
 
 version() {
@@ -105,6 +105,9 @@ user_args() {
 		"--fix")
 			ACTION="fix_csv"
 			;;
+		"--gpx")
+			ACTION="from_csv_to_gpx"
+			;;
 		*)
 			if [ $# -eq 1 ];
 			then
@@ -128,10 +131,10 @@ check_essentials() {
 			# is it a valid text file ?
 			if [ "$( file -b "$LAST_ARGUMENT" )" == "UTF-8 Unicode text" ];
 			then
-				[ "$CLEAN" == "FALSE" ]	&& printf "\e[33m-->\e[0m file \e[36m%s\e[0m is a valid UTF-8 encoded file\n" "$LAST_ARGUMENT"
+				[ "$CLEAN" == "FALSE" ]	&& printf "\e[33m-->\e[0m File \e[36m%s\e[0m is a valid UTF-8 encoded file\n" "$LAST_ARGUMENT"
 				COORDINATES_CSV="$LAST_ARGUMENT"
 			else
-				printf "\e[31m-!> ERROR:\e[0m file \e[31m%s\e[0m is not a valid UTF-8 encoded file\n" "$LAST_ARGUMENT"
+				printf "\e[31m-!> ERROR:\e[0m File \e[31m%s\e[0m is not a valid UTF-8 encoded file\n" "$LAST_ARGUMENT"
 				exit 1
 			fi
 		fi
@@ -144,7 +147,11 @@ action() {
 	then
 		case $ACTION in 
 			"fix_csv")
-				parse_original_csv
+				parser_raw2csv
+				exit 0
+				;;
+			"from_csv_to_gpx")
+				parser_csv2gpx
 				exit 0
 				;;
 		esac
@@ -161,7 +168,7 @@ capitalize() {
 	printf $1 | head -c 1 | tr [:lower:] [:upper:] ; printf $1 | tail -c +2
 }
 
-format() {
+format_raw2csv_names () {
 
 	# first letter of first word is always uppercase
 	capitalize $1
@@ -192,7 +199,7 @@ format() {
 	#echo
 }
 
-parse_original_csv() {
+parser_raw2csv() {
 
 	for i in $( cat "$COORDINATES_CSV" | tr " " "_" );
 	do
@@ -200,7 +207,7 @@ parse_original_csv() {
 		wp_id_number=$( printf %s $i | cut -d ";" -f 2 )
 		wp_name=$( printf %s $i | cut -d ";" -f 3 | tr "_" " " | tr -d "-" | tr [:upper:] [:lower:] )
 
-		wp_name_formatted=$( format $wp_name )
+		wp_name_formatted=$( format_raw2csvi_names $wp_name )
 
 		wp_latitude=$( printf %s $i | cut -d ";" -f 4 )
 		wp_lat_sign=$( printf %s $wp_latitude | cut -d _ -f 4 )
@@ -220,6 +227,65 @@ parse_original_csv() {
 	done
 }
 
+parser_csv2gpx() {
+
+	COORDINATES_GPX=$( basename "$COORDINATES_CSV" .csv ).gpx
+
+	[ "$CLEAN" == "FALSE" ]	&& printf "\e[33m-->\e[0m Parsing \e[36m%s\e[0m into GPS eXchange Format:\n\n" "$COORDINATES_GPX"
+
+	printf "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\" ?>\n"	
+	printf "<gpx xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd\" version=\"1.1\" creator=\"%s script v%s\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n" $( capitalize $SCRIPT_NAME ) $SCRIPT_VERSION
+
+	for i in $( cat "$COORDINATES_CSV" | tr ' ' _ );
+	do
+		wp_id=$( printf %s $i | cut -d ";" -f 1 | tr -d \" )
+		wp_name=$( printf %s $i | cut -d ";" -f 2 | tr -d \" )
+
+		wp_lat_hemisphere=$( printf %s $i | cut -d ";" -f 3 | tr -d \" )
+		wp_lat_deg=$( printf %s $i | cut -d ";" -f 4 )
+		wp_lat_min=$( printf %s $i | cut -d ";" -f 5 )
+		wp_lat_sec=$( printf %s $i | cut -d ";" -f 6 )
+		case "$wp_lat_hemisphere" in
+			"N" | "n" )
+				wp_lat_sign=1
+				;;
+			"S" | "s" )
+				wp_lat_sign=-1
+				;;
+			*)
+				printf "\e[31m-!> ERROR:\e[0m Latitude must be either NORTH or SOUTH. Abort\n"
+				exit 1
+				;;
+		esac		
+		wp_latitude=$( echo scale=8 \; $wp_lat_sign \* $wp_lat_deg + $wp_lat_min / 60 + $wp_lat_sec / 3600 | bc -l | tr . , )
+
+		wp_lon_hemisphere=$( printf %s $i | cut -d ";" -f 7 | tr -d \" )
+		wp_lon_deg=$( printf %s $i | cut -d ";" -f 8 )
+		wp_lon_min=$( printf %s $i | cut -d ";" -f 9 )
+		wp_lon_sec=$( printf %s $i | cut -d ";" -f 10 )
+		case "$wp_lon_hemisphere" in
+			"E" | "E" )
+				wp_lon_sign=1
+				;;
+			"W" | "W" )
+				wp_lon_sign=-1
+				;;
+			*)
+				printf "\e[31m-!> ERROR:\e[0m Longitude must be either EAST or WEST. Abort\n"
+				exit 1
+				;;
+		esac
+		wp_longitude=$( echo scale=8 \; $wp_lon_sign \* $wp_lon_deg + $wp_lon_min / 60 + $wp_lon_sec / 3600 | bc -l | tr . , )
+
+		printf "  <wp lat=\"%.8f\" lon=\"%.8f\">\n" $wp_latitude $wp_longitude
+		printf "    <name>%s %s</name>\n" "$wp_id" "$( printf "%s" $wp_name | tr _ ' ' )"
+		printf "    <sym>Circle</sym>\n"
+		printf "    <extensions>\n      <identifier />\n      <category />\n    </extensions>\n"
+		printf "  </wpt>\n"
+	done
+
+	printf "</gpx>\n"	
+}
 
 # ---------------------------------------------------------------------------------------
 #  Main block
