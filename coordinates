@@ -277,7 +277,7 @@ parser_csv2gpx() {
 		esac
 		wp_longitude=$( echo scale=8 \; $wp_lon_sign \* $wp_lon_deg + $wp_lon_min / 60 + $wp_lon_sec / 3600 | bc -l | tr . , )
 
-		printf "  <wp lat=\"%.8f\" lon=\"%.8f\">\n" $wp_latitude $wp_longitude
+		printf "  <wpt lat=\"%.8f\" lon=\"%.8f\">\n" $wp_latitude $wp_longitude
 		printf "    <name>%s %s</name>\n" "$wp_id" "$( printf "%s" $wp_name | tr _ ' ' )"
 		printf "    <sym>Circle</sym>\n"
 		printf "    <extensions>\n      <identifier />\n      <category />\n    </extensions>\n"
