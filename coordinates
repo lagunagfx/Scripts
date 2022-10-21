@@ -14,6 +14,8 @@
 #  ChangeLog
 # ---------------------------------------------------------------------------------------
 #
+#  2022.10.21 | Added Keyhole Markup Language (.kml) support
+#  2022.10.20 | Added GPS eXchange Format (.gpx) support 
 #  2022.10.19 | The "--fix" option is complete, which formatted the original .csv data
 #  2022.10.18 | 1st draft
 #
@@ -22,7 +24,7 @@
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
-SCRIPT_VERSION="2022.10.19"
+SCRIPT_VERSION="2022.10.21"
 
 # ---------------------------------------------------------------------------------------
 #  Base functions
@@ -106,7 +108,12 @@ user_args() {
 			ACTION="fix_csv"
 			;;
 		"--gpx")
-			ACTION="from_csv_to_gpx"
+			ACTION="csv2gpx"
+			CLEAN="true"
+			;;
+		"--kml")
+			ACTION="csv2kml"
+			CLEAN="TRUE"
 			;;
 		*)
 			if [ $# -eq 1 ];
@@ -129,7 +136,7 @@ check_essentials() {
 			exit 1
 		else
 			# is it a valid text file ?
-			if [ "$( file -b "$LAST_ARGUMENT" )" == "UTF-8 Unicode text" ];
+			if [ ! -z "$( file -b "$LAST_ARGUMENT" | grep UTF-8 )" ];
 			then
 				[ "$CLEAN" == "FALSE" ]	&& printf "\e[33m-->\e[0m File \e[36m%s\e[0m is a valid UTF-8 encoded file\n" "$LAST_ARGUMENT"
 				COORDINATES_CSV="$LAST_ARGUMENT"
@@ -150,8 +157,12 @@ action() {
 				parser_raw2csv
 				exit 0
 				;;
-			"from_csv_to_gpx")
+			"csv2gpx")
 				parser_csv2gpx
+				exit 0
+				;;
+			"csv2kml")
+				parser_csv2kml
 				exit 0
 				;;
 		esac
@@ -289,6 +300,74 @@ parser_csv2gpx() {
 	done
 
 	printf "</gpx>\n"	
+}
+
+parser_csv2kml() {
+
+	COORDINATES_GPX=$( basename "$COORDINATES_CSV" .csv ).gpx
+
+	[ "$CLEAN" == "FALSE" ]	&& printf "\e[33m-->\e[0m Parsing \e[36m%s\e[0m into GPS eXchange Format:\n\n" "$COORDINATES_GPX"
+
+	printf "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n"	
+	printf "<kml xmlns=\"http://www.opengis.net/kml/2.2\">"
+	printf "  <Document>\n"
+
+	for i in $( cat "$COORDINATES_CSV" | tr ' ' _ );
+	do
+		wp_id=$( printf %s $i | cut -d ";" -f 1 | tr -d \" )
+		wp_name=$( printf %s $i | cut -d ";" -f 2 | tr -d \" )
+
+		wp_lat_hemisphere=$( printf %s $i | cut -d ";" -f 3 | tr -d \" )
+		wp_lat_deg=$( printf %s $i | cut -d ";" -f 4 )
+		wp_lat_min=$( printf %s $i | cut -d ";" -f 5 )
+		wp_lat_sec=$( printf %s $i | cut -d ";" -f 6 )
+		case "$wp_lat_hemisphere" in
+			"N" | "n" )
+				wp_lat_sign=1
+				;;
+			"S" | "s" )
+				wp_lat_sign=-1
+				;;
+			*)
+				printf "\e[31m-!> ERROR:\e[0m Latitude must be either NORTH or SOUTH. Abort\n"
+				exit 1
+				;;
+		esac		
+		wp_latitude=$( echo $wp_lat_sign \* \( $wp_lat_deg + \( $wp_lat_min / 60 \) + \( $wp_lat_sec / 3600 \) \) | bc -l | tr . , )
+
+		wp_lon_hemisphere=$( printf %s $i | cut -d ";" -f 7 | tr -d \" )
+		wp_lon_deg=$( printf %s $i | cut -d ";" -f 8 )
+		wp_lon_min=$( printf %s $i | cut -d ";" -f 9 )
+		wp_lon_sec=$( printf %s $i | cut -d ";" -f 10 )
+		case "$wp_lon_hemisphere" in
+			"E" | "E" )
+				wp_lon_sign=1
+				;;
+			"W" | "W" )
+				wp_lon_sign=-1
+				;;
+			*)
+				printf "\e[31m-!> ERROR:\e[0m Longitude must be either EAST or WEST. Abort\n"
+				exit 1
+				;;
+		esac
+		wp_longitude=$( echo $wp_lon_sign \* \( $wp_lon_deg + \( $wp_lon_min / 60 \) + \( $wp_lon_sec / 3600 \) \) | bc -l | tr . , )
+
+		# spanish LANG/LOCALE makes us use "," as delimiter. Now we should go back to "." as decimal notator
+		wp_latitude_fixed=$( printf "%.8f" $wp_latitude | tr , . )
+		wp_longitude_fixed=$( printf "%.8f" $wp_longitude | tr , . )
+
+		printf "    <Placemark>\n"
+		printf "      <name>%s %s</name>\n" "$wp_id" "$( printf "%s" $wp_name | tr _ ' ' )"
+		printf "      <description>%s</description>\n" "$( printf "%s" $wp_name | tr _ ' ' )"
+		printf "      <Point>\n"
+		printf "        <coordinates>%s,%s</coordinates>\n" "$wp_longitude_fixed" "$wp_latitude_fixed"
+		printf "      </Point>\n"
+		printf "    </Placemark>\n"
+	done
+	
+	printf "  </Document>\n"
+	printf "</kml>\n"	
 }
 
 # ---------------------------------------------------------------------------------------
