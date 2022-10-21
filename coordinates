@@ -277,7 +277,11 @@ parser_csv2gpx() {
 		esac
 		wp_longitude=$( echo scale=8 \; $wp_lon_sign \* $wp_lon_deg + $wp_lon_min / 60 + $wp_lon_sec / 3600 | bc -l | tr . , )
 
-		printf "  <wpt lat=\"%.8f\" lon=\"%.8f\">\n" $wp_latitude $wp_longitude
+		# spanish LANG/LOCALE makes us use "," as delimiter. Now we should go back to "." as decimal notator
+		wp_latitude_fixed=$( printf "%.8f" $wp_latitude | tr , . )
+		wp_longitude_fixed=$( printf "%.8f" $wp_longitude | tr , . )
+
+		printf "  <wpt lat=\"%s\" lon=\"%s\">\n"  "$wp_latitude_fixed" "$wp_longitude_fixed"
 		printf "    <name>%s %s</name>\n" "$wp_id" "$( printf "%s" $wp_name | tr _ ' ' )"
 		printf "    <sym>Circle</sym>\n"
 		printf "    <extensions>\n      <identifier />\n      <category />\n    </extensions>\n"
