@@ -1,0 +1,116 @@
+#!/bin/sh
+
+# Description:
+# This is a brief description of my script
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ChangeLog:
+# 2020.02.03 | 1st revision of this template
+
+# Standard functions and variables for every script
+	
+scriptname=$( basename $0 )
+
+usage() {
+	printf "usage: %s [-h]\n" $scriptname
+	printf "    -h,    --help    show this help message\n"
+	printf "           --debug   developer's mode\n"
+	printf "commands:\n"
+	printf "    update           pacman -Suy\n"
+	printf "    refresh-database pacman -Fy\n"
+	printf "    provides         pacman -F\n"
+	printf "    provides-exact   pacman -Fx (full path)\n"
+	printf "complex sequences:\n"
+	printf "    refresh-keyring  Useful for solving keyring issues\n"
+	printf "    rebuild-keyring  A more drastic approach to keyring errors\n"
+}
+
+# User defined functions go here
+
+user_args() {
+	case $1 in
+		"update")
+			sudo pacman -Suy
+			;;
+		"refresh-database")
+			sudo pacman -Fy
+			;;
+		"provides")
+			pacman -F $2
+			;;
+		"provides-exact")
+			pacman -Fx $2
+			;;
+		"refresh-keyring")
+			sudo pacman -Syu
+			sudo pacman-key --refresh-keys
+			sudo pacman-key --populate archlinux manjaro
+			;;		
+		"rebuild-keyring")
+			sudo rm -rv /etc/pacman.d/gnupg
+			sudo pacman -Sy gnupg archlinux-keyring manjaro-keyring
+			sudo pacman-key --init
+			sudo pacman-key --populate archlinux manjaro
+			sudo pacman-key --refresh-keys
+			sudo pacman -Sc
+			sudo pacman -Syu
+			;;
+	esac
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--debug")
+					debugmode="true"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# MAIN and DEBUG versions separated so it's possible to "try new things" inside debug()
+# while retaining the last working code writeup in main()  
+
+main() {
+	# prerequisites of the script to be checked BEFORE any argument evalutation
+	check_args "$@"
+	# Execute standard OR debug version of the script
+	if [ -z $debugmode ];
+	then
+		# script actions according to its arguments
+		printf "\e[1m-->\e[0m script %s does something.\n" $scriptname
+	else
+		printf "\e[1m-!>\e[0m script %s running in DEBUG mode:\n" $scriptname
+		# script actions according to its arguments
+		printf "\e[1m-->\e[0m script %s alternate version.\n" $scriptname
+	fi
+
+	# script actions according to arguments given
+}
+
+# script execution call goes here
+main "$@"
