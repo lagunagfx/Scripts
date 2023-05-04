@@ -8,7 +8,8 @@
 #
 # ChangeLog:
 # 2020.02.03 | 1st revision of this template
-
+# 2023.05.04 | Added "orphan packages" management
+#
 # Standard functions and variables for every script
 	
 scriptname=$( basename $0 )
@@ -18,10 +19,13 @@ usage() {
 	printf "    -h,    --help    show this help message\n"
 	printf "           --debug   developer's mode\n"
 	printf "commands:\n"
-	printf "    update           pacman -Suy\n"
-	printf "    refresh-database pacman -Fy\n"
+	printf "    list-orphans     pacman -Qtdq"
 	printf "    provides         pacman -F\n"
 	printf "    provides-exact   pacman -Fx (full path)\n"
+	printf "    refresh-database pacman -Fy\n"
+	printf "    remove-with-deps sudo pacman -Rcns <package>"
+	printf "    remove-orphans   sudo pacman -Rns \$( pacman -Qtdq )"
+	printf "    update           pacman -Suy\n"
 	printf "complex sequences:\n"
 	printf "    refresh-keyring  Useful for solving keyring issues\n"
 	printf "    rebuild-keyring  A more drastic approach to keyring errors\n"
@@ -31,11 +35,8 @@ usage() {
 
 user_args() {
 	case $1 in
-		"update")
-			sudo pacman -Suy
-			;;
-		"refresh-database")
-			sudo pacman -Fy
+		"list-orphans")
+			pacman -Qtdq
 			;;
 		"provides")
 			pacman -F $2
@@ -43,11 +44,6 @@ user_args() {
 		"provides-exact")
 			pacman -Fx $2
 			;;
-		"refresh-keyring")
-			sudo pacman -Syu
-			sudo pacman-key --refresh-keys
-			sudo pacman-key --populate archlinux manjaro
-			;;		
 		"rebuild-keyring")
 			sudo rm -rv /etc/pacman.d/gnupg
 			sudo pacman -Sy gnupg archlinux-keyring manjaro-keyring
@@ -56,6 +52,23 @@ user_args() {
 			sudo pacman-key --refresh-keys
 			sudo pacman -Sc
 			sudo pacman -Syu
+			;;
+		"refresh-database")
+			sudo pacman -Fy
+			;;
+		"refresh-keyring")
+			sudo pacman -Syu
+			sudo pacman-key --refresh-keys
+			sudo pacman-key --populate archlinux manjaro
+			;;		
+		"remove-orphans")
+			sudo pacman -Rns $( pacman -Qtdq )
+			;;
+		"remove-with-deps")
+			sudo pacman -Rcns $2
+			;;
+		"update")
+			sudo pacman -Suy
 			;;
 	esac
 }
