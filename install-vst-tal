@@ -1,0 +1,239 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# Automated install of TAL's Sampler plugin on Linux
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+#  2023.05.13 | 1st draft. Just works on TAL's Sampler for Linux
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="2023.05.13"
+
+OS="Linux"
+
+LINUX_VST2_FOLDER="/usr/lib/vst"
+LINUX_VST3_FOLDER="/usr/lib/vst3"
+LINUX_CLAP_FOLDER="/usr/lib/clap"
+
+LINUX_VST2_PLUGIN="libTAL-Sampler.so"
+LINUX_VST3_PLUGIN="TAL-Sampler.vst3"
+LINUX_CLAP_PLUGIN="TAL-Sampler.clap"
+
+# ---------------------------------------------------------------------------------------
+#  Base functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "         --debug          developer mode\n"
+	printf "   -h,   --help           show this help message\n"
+	printf "   -c,   --check          check for previously installed plugins\n"
+	printf "   -i,   --install        install plugin to the system folder\n"
+	printf "         --force          overwrite previously installed plugins\n"
+	printf "         --version        show current version\n"
+}
+
+version() {
+	printf "  * \e[33m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					DEBUG="TRUE"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Standard Functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEFAULT_DEBUG="FALSE"
+	DEFAULT_LAST_ARGUMENT_NEEDED="FALSE"
+	DEFAULT_OVERWRITE="FALSE"
+
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="DEFAULT_LAST_ARGUMENT_NEEDED"
+	[ -z $OVERWRITE ] && OVERWRITE="$DEFAULT_OVERWRITE"
+}
+
+user_args() {
+	case $1 in
+		# insert user defined parameters
+		"-c"|"--check")
+			ACTION="CHECK"
+			;;
+		"-i"|"--install")
+			ACTION="INSTALL"
+			;;
+		"--force")
+			OVERWRITE="TRUE"
+			;;
+		*)
+			if [ $# -eq 1 ];
+			then
+				LAST_ARGUMENT="$1"		
+			fi
+			;;
+	esac
+}
+
+check_essentials() {
+
+ 	if [ -z "$LAST_ARGUMENT" ] && [ "$LAST_ARGUMENT_NEEDED" == "TRUE" ];
+ 	then
+ 		printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
+ 		exit 1
+ 	fi
+
+}
+
+action() {
+	# Execute standard OR debug version of the script
+	if [ "$DEBUG" == "FALSE" ];
+	then
+		if [ "$ACTION" == "CHECK" ] || [ "$ACTION" == "INSTALL" ];
+		then
+			check_and_install $OS VST2 $LINUX_VST2_FOLDER $LINUX_VST2_PLUGIN
+			check_and_install $OS VST3 $LINUX_VST3_FOLDER $LINUX_VST3_PLUGIN
+			check_and_install $OS CLAP $LINUX_CLAP_FOLDER $LINUX_CLAP_PLUGIN
+		fi
+	else
+		printf "\e[31m-!>\e[0m Running in \e[31mDEBUG\e[0m mode\n\n" $SCRIPT_NAME
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+
+
+check_and_installed() {
+# usage:
+# check_and_install <os> <plugin-type> <install-folder> <plugin-file/plugin-folder>
+
+	PLUGIN_OS="$1"
+	PLUGIN_TYPE="$2"
+	INSTALL_FOLDER="$3"
+	PLUGIN="$4"
+
+	# is there a VST plugins folder ?
+	if [ -d $INSTALL_FOLDER ];
+	then
+		printf "\e[33m-->\e[0m %s %s folder found : \e[32m%s\e[0m.\n" $PLUGIN_OS $PLUGIN_TYPE $INSTALL_FOLDER
+		# is there a version of the plugin currently installed ?
+		if [ -r $INSTALL_FOLDER/$PLUGIN ];
+		then
+			printf "\e[33m-->\e[0m %s %s plugin found : \e[32m%s/%s\e[0m.\n" $PLUGIN_OS $PLUGIN_TYPE $INSTALL_FOLDER $PLUGIN
+			PREVIOUSLY_INSTALLED="TRUE"
+		else
+			printf "\e[34m-->\e[0m Previous installed version of \e[36m%s\e[0m not found.\n" $PLUGIN
+			PREVIOUSLY_INSTALLED="FALSE"
+		fi
+		# should the plugin be installed ?
+		if [ "$ACTION" == "INSTALL" ];
+		then
+			# is the source plugin file/folder available ?
+			if [ -r ./$PLUGIN ];
+			then
+				# No previous versions installed before
+				if [ $PREVIOUSLY_INSTALLED == "FALSE" ];
+				then
+					printf "\e[33m-->\e[0m Copying plugin "
+					[ "$PLUGIN_TYPE" != "VST3" ] && printf "file " || printf "folder "
+					printf "\e[33m%s\e[0m to \e[32m%s\e[0m.\n" $PLUGIN $INSTALL_FOLDER
+					# copying the actual file to the system folder
+					sudo cp -nr $PLUGIN $INSTALL_FOLDER
+				fi
+				# A previous installation was found
+				if [ $PREVIOUSLY_INSTALLED == "TRUE" ];
+				then
+					if [ $OVERWRITE == "TRUE" ];
+					then
+						printf "\e[33m-->\e[0m Overwriting plugin "
+						[ "$PLUGIN_TYPE" != "VST3" ] && printf "file " || printf "folder "
+						printf "\e[33m%s\e[0m in \e[32m%s\e[0m.\n" $PLUGIN $INSTALL_FOLDER
+						# copying the actual file to the system folder
+						sudo cp -r $PLUGIN $INSTALL_FOLDER
+					else
+						printf "\e[31m-!>\e[0m Plugin already present  : (add '--force' option to overwrite).\n"
+						exit 1
+					fi
+				fi
+			else
+				# source plugin could not be found
+				printf "\e[31m-!>\e[0m Unable to find source " 
+				[ "$PLUGIN_TYPE" != "VST3" ] && printf "file " || printf "folder "
+				printf "\e[31m%s\e[0m.\n" $PLUGIN
+			fi
+		fi
+
+	else
+		# There are no suitable install folder -> Abort !!!
+		printf "\e[31m-!> ERROR:\e[0m %s %s folder not found at \e[31m%s\e[0m.\n" $PLUGIN_OS $PLUGIN_TYPE $INSTALL_FOLDER		
+		exit 1
+	fi
+	printf "  .\n"	
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main block
+# ---------------------------------------------------------------------------------------
+
+main() {
+	check_args "$@"
+	defaults
+	check_essentials
+	version
+	action
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main call
+# ---------------------------------------------------------------------------------------
+
+main "$@"
