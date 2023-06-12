@@ -7,12 +7,13 @@
 # Jorge Barrientos Poisson
 #
 # ChangeLog:
+# 2023.06.12 | Updated from LagunaLabs to LagunaGFX
 # 2020.03.09 | Fixed a bug which downloaded the API webpage over and over.
 # 2018.xx.xx | 1st version of this script
 
 scriptname=$( basename $0 )
 
-AREGISTER_LAGUNALABS="https://ipv4.cloudns.net/api/dynamicURL/?q=MTQxOTk2ODoyNDgyODg3NTo3M2E5NGNkNDRlODBiMWNhY2ZjYzFjYjQyODFmMWRlZGU5NzVlOGUyMmYzMWI2ZmJhMTA4ZTc5ZTNiNWU5MDQx"
+AREGISTER_LAGUNAGFX="https://ipv4.cloudns.net/api/dynamicURL/?q=MTQxOTk2ODoyNDgyODg3NTo3M2E5NGNkNDRlODBiMWNhY2ZjYzFjYjQyODFmMWRlZGU5NzVlOGUyMmYzMWI2ZmJhMTA4ZTc5ZTNiNWU5MDQx"
 AREGISTER_SEAFILE="https://ipv4.cloudns.net/api/dynamicURL/?q=MTQxOTk2ODoyNDgyODU1NDpkMDA3MTEzYjQ5MDVhMGMzNGI4OWQxNTcxOTVmNDA3MThiODRjODhjMjU2ZDU1YjNlYTIzZTAyZDI1ODRjNjE1"
 AREGISTER_OFFSITE="https://ipv4.cloudns.net/api/dynamicURL/?q=MTQxOTk2ODoyNDgyODg3Njo1OTNiNzRkMTM2MWYxYzUyNGU2ZjRmYjQ4MWFjNjE1NmE5Y2Y0M2UzOGRhOTNkYmNiZGZhYWU3NTQxZWUzYTdm"
 
@@ -25,7 +26,8 @@ usage() {
 query() {
 	if [ ! -z $1 ];
 	then
-		wget -q --read-timeout=0.0 --waitretry=5 --tries 400 --background "$1" -O - > /dev/null 2>&1
+		# wget -q --read-timeout=0.0 --waitretry=5 --tries 400 --background "$1" -O - > /dev/null 2>&1
+		wget --read-timeout=0.0 --waitretry=5 --tries 400 --background "$1" -O -
 		exit 0
 	else
 		printf "ERROR: no server specified\n"
@@ -53,8 +55,8 @@ check_args() {
 					;;
 				"-s"|"--server")
 					case $2 in
-						"lagunalabs")
-							query "$AREGISTER_LAGUNALABS"
+						"lagunagfx")
+							query "$AREGISTER_LAGUNAGFX"
 							;;
 						"seafile")
 							query "$AREGISTER_SEAFILE"
