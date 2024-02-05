@@ -1,0 +1,333 @@
+#!/bin/sh
+
+# Description:
+# Transcode any video file to .mp4 format, applying various filters and keeping the metadata
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ChangeLog:
+# 2020.03.09 | 1st draft (only for .MOV files, with values fixed)
+# 2021.01.08 | Added "--no-audio" and "--no-stabilize" options
+# 2021.01.09 | Added "--no-denoise" and various improvements
+# 2021.01.10 | Now not limited to .MOV videos (handles different input extensions)
+# 2021.01.20 | Help improved. Check for essential "--file" parameter before proceeding
+	
+scriptname=$( basename $0 )
+
+# FFMPEG settings
+
+    #x264_opts="-c:v libx264 -preset slow -tune film -crf 18"
+    #x265_opts="-c:v libx265 -preset slow -tune grain -crf 21"
+    opts_fps="fps=fps=25:round=near:eof_action=round"
+    opts_denoise="hqdn3d=4.0:3.0:6.0:4.5"
+    opts_aac="-c:a aac -b:a 256k -ar 44100"
+    opts_metadata="-movflags use_metadata_tags"
+    #opts_metadata="-f ffmetadata -c copy -map_metadata 0"
+
+# Standard functions and variables for every script
+
+usage() {
+    printf "usage: %s [-h]\n" $scriptname
+    printf "   -h,   --help           show this help message\n"
+    printf "   -c,   --codec          specify codec between x264 or x265\n"
+    printf "         --no-audio       remove audio stream\n"
+    printf "         --fps <float>    specify new framerate for video stream\n"	
+    printf "         --st-shakiness   footage shakiness, from 1 (little) to maximum (10)\n"
+    printf "         --st-stepsize    stabilization area of analysis in pixels (default is 6)\n"
+    printf "         --no-stabilize   disable video stabilization\n"
+    printf "         --no-denoise     disable noise removal\n"
+    printf "         --debug          developer's mode\n"
+}
+
+defaults() {
+    # default settings for most videos
+    default_resolution="1080p"
+    default_codec="x264"
+    default_crfx265="21"
+    default_crfx264="18"
+    default_preset="slow"
+    default_tunex264="film"
+    default_tunex265="grain"
+    default_denoise="yes"
+    # video filter : camera stabilization using VidStab library
+    default_stabilize="yes"
+    default_st_shakiness="5" # from little (1) to strong (10) footage shakiness
+    #default_st_accuracy=15
+    default_st_stepsize="6" # size in pixels of the region scanned (default is 6)
+    default_st_show="0" # 
+    default_st_zoom="0" # zoom percentage (positive value for zoom in, negative for zoom out)
+
+    # conditional oneliners ( if/then/else == []/&&/|| )
+    [ -z $resolution  ] && resolution="$default_resolution"
+    [ -z $codec ] && codec="$default_codec"
+    [ -z $preset ] && preset="$default_preset"
+    [ -z $stabilize ] && stabilize="$default_stabilize"
+    [ -z $st_shakiness ] && st_shakiness="$default_st_shakiness"
+    [ -z $st_stepsize ] && st_stepsize="$default_st_stepsize"
+    [ -z $st_show ] && st_show="$default_st_show" 
+    [ -z $st_zoom ] && st_zoom="$default_st_zoom" 
+    [ -z $denoise ] && denoise="$default_denoise"
+
+    case $codec in
+	"x264")
+	    [ -z $crf ] && crf=$default_crfx264
+	    [ -z $tune ] && tune=$default_tunex264
+	    ;;
+	"x265")
+	    [ -z $crf ] && crf=$default_crfx265
+	    [ -z $tune ] && tune=$default_tunex265
+	    ;;
+	*)
+	    printf "\e[1mERROR :\e[0m unsupported codec (%s).\n" $codec
+	    exit 1
+	    ;;
+    esac
+
+    vf_stabilize_passone="vidstabdetect=stepsize=$st_stepsize:shakiness=$st_shakiness:accuracy=15:show=$st_show:result=transforms.trf"
+    #vf_stabilize_passtwo="vidstabtransform=input=transforms.trf:smoothing=10:zoom=$st_zoom:optzoom=2,unsharp=5:5:0.8:3:3:0.4"
+    vf_stabilize_passtwo="vidstabtransform=input=transforms.trf:smoothing=10:zoom=$st_zoom:optzoom=2:interpol=bicubic"
+}
+
+build_syntax() {
+
+    EXT="."$( echo $INPUT | rev | cut -d . -f 1 | rev ) 
+    OUT=$( basename $INPUT $EXT )"_"$resolution"_"$codec"_crf"$crf
+
+    function fxchain() {
+	if [ "$fxchain" == "true" ];
+	then
+	    ffmpeg_vf+=","
+	    OUT+="-"
+	else
+	    OUT+="_"
+	    ffmpeg_vf="-filter:v " # fist occurrence, must open the filter chain definition
+	    fxchain="true"
+	fi
+    }
+
+    if [ ! -z $fps ];
+    then
+	fxchain
+	ffmpeg_vf="$opts_fps"
+	OUT+=$fps"fps"
+	fxchain="true"
+    fi
+
+    if [ "$stabilize" == "yes" ];
+    then
+	fxchain		
+	ffmpeg_vf+=$vf_stabilize_passtwo
+	OUT+="st"
+    fi
+
+    if [ "$denoise" == "yes" ];
+    then
+	fxchain
+	ffmpeg_vf+=$opts_denoise
+	OUT+="nr"
+    fi
+
+    OUT+=".mp4"
+
+    ffmpeg_command="-y -i $INPUT -c:v lib$codec -crf $crf -preset $preset -tune $tune $ffmpeg_vf $opts_aac $opts_metadata"
+}
+
+dump_metadata() {
+    METAFILE=$( basename $2 .mp4 )".metadata"
+    
+    ffmpeg -i $1 -f ffmetadata $METAFILE
+    echo >> $METAFILE
+    ffprobe $1 2>&1 | sed -n '/^Input/,$p' >> $METAFILE
+    echo >> $METAFILE
+    exiftool $1 >> $METAFILE
+}
+
+transcode() {
+    dump_metadata $INPUT $OUT
+
+    if [ "$stabilize" == "yes" ]; 
+    then
+	printf "\n\e[0;31m--> Stabilizing (Pass One)\e[0m\n\n"
+	ffmpeg -y -i $INPUT -filter:v $vf_stabilize_passone -f null -
+	printf "\n\e[0;32m--> Stabilizing (Pass Two)\e[0m\n\n"
+    fi
+
+    #ffmpeg -y -i $INPUT -c:v lib$codec -crf $crf -preset $preset -tune $tune -filter:v "$ffmpeg_vf" $opts_aac $opts_metadata $OUT
+    ffmpeg $ffmpeg_command $OUT
+
+    if [ -r transforms.trf ];
+    then
+	rm transforms.trf
+    fi
+}
+
+show_opts() {
+    printf "          fps : %f\n" $fps
+    printf "\n    stabilize : %s\n" $stabilize
+    printf "     1st pass : %s\n" $vf_stabilize_passone
+    printf "     2nd pass : %s\n" $vf_stabilize_passtwo
+    printf "\n video filter :\n\t\t"
+    echo $ffmpeg_vf | cut -d " " -f 2 | sed 's/\,/\,\n\t\t/g'
+    printf "\n      command :"
+    echo $ffmpeg_command | sed 's/\-/\n\t\t-/g'
+    printf "\t\t%s\n" $OUT
+}
+
+user_args() {
+    case $1 in
+	"-r"|"--resolution")
+	    [ ! -z $2 ] && resolution="$2" || printf "\e[1ma valid resolution must be specified\e[0m.\n"
+	    ;;
+	"-c"|"--codec")
+	    [ ! -z $2 ] && codec="$2" || printf "\e[1ma valid codec must be specified\e[0m.\n"
+	    ;;
+	"--crf")
+	    [ ! -z $2 ] && crf="$2" || printf "%s a valid CRF value must be specified.\n" $ERROR
+	    ;;
+	"--fps")
+	    if [ ! -z $2 ];
+	    then
+		if [ $2 -gt 0 ];
+		then
+		    fps=$2
+		else
+		    printf "Frames per second should be greater than zero"
+		    exit 1
+		fi
+	    fi
+	    ;;
+	"--rotate")
+	    case $2 in
+		"-90")
+		    echo "rotating 270 degrees"
+		    ;; 
+		*)					
+		    printf "\e[31mERROR:\e[0m a valid rotation value must be specified.\n" "$ERROR"
+		    exit 1
+		    ;;
+	    esac
+	    ;;
+	"--st-shakiness")
+	    if [ ! -z $2 ];
+	    then
+		if [ $2 -ge 1 ] && [ $2 -le 10 ];
+		then
+		    st_shakiness=$2
+		else
+		    printf "\e[31mERROR:\e[0m stabilization shakiness must be a value between 1 and 10 (default is 5).\n"	
+		    exit 1
+		fi
+	    fi
+	    ;;
+	"--st-stepsize")
+	    if [ ! -z $2 ];
+	    then
+		if [ $2 -ge 1 ];
+		then
+		    st_stepsize=$2
+		else
+		    printf "\e[31mERROR:\e[0m stabilization stepsize must be greater than 1 (default is 6).\n"
+		    exit 1
+		fi
+	    fi
+	    ;;
+	"--st-show")
+		if [ ! -z $2 ];
+		then
+			if [ $2 -ge 0 ] && [ $2 -le 2 ];
+			then
+				st_show=$2
+			else
+				printf "\e[31mERROR:\e[0m stabilization show must be a value between 0 and 2 (default is 0).\n" "$ERROR"	
+				exit 1
+			fi
+		fi
+		;;
+	"--st-zoom")
+		if [ ! -z $2 ];
+		then
+			if [ $2 -ge 0 ] && [ $2 -le 100 ];
+			then
+				st_zoom=$2
+			else
+				printf "\e[31mERROR:\e[0m stabilization zoom must be a percentage (default is 0).\n" "$ERROR"	
+				exit 1
+			fi
+		fi
+		;;
+	"--no-stabilize")
+		stabilize="no"
+		;;
+	"--no-denoise")
+		denoise="no"
+		;;
+	"--no-audio")
+		opts_aac="-an"
+		;;
+	"-f"|"--file")
+		[ -r $2 ] && INPUT=$2 || printf "\e[31mERROR:\e[0m Can't read file %s\n" $2
+		;;
+    esac
+}
+
+check_essentials() {
+    if [ -z "$INPUT" ];
+    then
+		printf "\e[31mERROR:\e[0m A source file must be specified\n"
+		exit 1	
+    fi
+}
+
+check_args() {
+    if [ $# -eq 0 ];
+    then
+		# script is called with zero arguments 
+		usage
+	exit 0
+    else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+			# default help option
+			"-h"|"--help")
+				usage
+				exit 0
+				;;
+			"--debug")
+				debugmode="true"
+				;;
+			# all user defined opts handled by user_args
+			*)
+				user_args "$@"
+				;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+    fi
+}
+
+# MAIN and DEBUG versions separated so it's possible to "try new things" inside debug()
+# while retaining the last working code writeup in main()  
+
+main() {
+    # prerequisites of the script to be checked BEFORE any argument evalutation
+    check_args "$@"
+    check_essentials
+    defaults
+    build_syntax
+    # Execute standard OR debug version of the script
+    if [ -z $debugmode ];
+    then
+		transcode 
+    else
+		printf "\n\e[1m\e[31m-!>\e[0m Running in \e[31m\e[1mDEBUG\e[0m mode:\n\n" $scriptname
+		show_opts 
+    fi
+}
+
+# script execution call goes here
+main "$@"
