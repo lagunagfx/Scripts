@@ -1,0 +1,358 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# This is a brief description of my script
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+#  2023.12.08 | 1st draft
+#  2023.12.18 | Sync locally to folder implemented
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="2023.12.18"
+
+BACKUP_HOST=safebox
+BACKUP_PATH="/mnt/backu1drive"
+BACKUP_LIST="$HOME/Documentos/Private/config/lagunagfx/backup.list"
+
+RSYNC_OPTIONS="-avP --protect-args"
+RSYNC_DELETE="--delete-after"
+
+PUSHOVER_CONFIG="$HOME/Documentos/Private/config/lagunagfx/pushover.conf"
+
+# ---------------------------------------------------------------------------------------
+#  Base functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "         --debug          developer mode\n"
+	printf "   -h,   --help           show this help message\n"
+	printf "         --version        show current version\n"
+	printf "         --no-notify      turn off Pushover notifications\n"
+	printf "   -l,   --local          use '--inplace' mode with 'rsync'\n"
+	printf "   -b    --backup         sync the specified folder\n"
+	printf "   -r    --restore        sync back the folder from a local or remote backup\n"
+	printf "         --batch          reads a list of folders to backup\n"
+
+}
+
+version() {
+	printf "  * \e[33m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					DEBUG="TRUE"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Standard Functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEFAULT_DEBUG="FALSE"
+	DEFAULT_LAST_ARGUMENT_NEEDED="FALSE"
+
+	DEFAULT_NOTIFY="TRUE"
+	DEFAULT_DELETE="FALSE"
+	DEFAULT_RESTORE="FALSE"
+	DEFAULT_LOCAL="FALSE"
+
+
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="$DEFAULT_LAST_ARGUMENT_NEEDED"
+	
+	[ -z $NOTIFY ] && NOTIFY="$DEFAULT_NOTIFY"
+	[ -z $DELETE ] && DELETE="$DEFAULT_DELETE"
+	[ -z $RESTORE ] && RESTORE="$DEFAULT_RESTORE"
+	[ -z $LOCAL ] && LOCAL="$DEFAULT_LOCAL"
+}
+
+user_args() {
+	case $1 in
+		"--no-notify")
+			NOTIFY="FALSE"
+			;;
+		"-d"|"--delete")
+			DELETE="TRUE"
+			;;
+		"-b"|"--backup")
+			ACTION="backup"
+			LAST_ARGUMENT_NEEDED="TRUE"
+			;;
+		"-b"|"--restore")
+			ACTION="backup"
+			RESTORE="TRUE"
+			LAST_ARGUMENT_NEEDED="TRUE"
+			;;
+		"--batch")
+			ACTION="batch"
+			LAST_ARGUMENT_NEEDED="FALSE"
+			;;
+		"-l"|"--local")
+			LOCAL="TRUE"
+			;;
+		*)
+			if [ $# -eq 1 ];
+			then
+				LAST_ARGUMENT="$1"		
+			fi
+			;;
+	esac
+}
+
+check_essentials() {
+	if [ "$LAST_ARGUMENT_NEEDED" = "TRUE" ];
+	then
+		if [ -z "$LAST_ARGUMENT" ];
+		then
+			printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
+			exit 1
+		else
+			if [ ! -r "$LAST_ARGUMENT" ];
+			then
+				printf "\e[31m-!>\e[0m File not found or not readable : \e[31m%s\e[0m\n" $LAST_ARGUMENT
+				exit 1
+			fi
+		fi
+	fi
+}
+
+action() {
+	# Execute standard OR debug version of the script
+	case $ACTION in
+		"backup")
+			do_backup $LAST_ARGUMENT
+			;;
+		"batch")
+			do_batch_backup
+			;;
+		*)
+			printf "\e[31m-!> ERROR:\e[0m ACTION variable \e[31m%s\e[0m not recognised\n" "$ACTION"
+			exit 1
+			;;
+	esac
+}
+
+# ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+
+check_readable_file() {
+
+	TEST_FILE="$1"
+
+	if [ ! -r "$TEST_FILE" ];
+	then
+		printf "\e[31m-!> ERROR:\e[0m file \e[31m%s\e[0m not found.\n" "$TEST_FILE"
+		exit 1
+	fi
+}
+
+read_config() {
+
+	CONFIG_FILE="$1"
+	
+	# remove all empty lines and lines starting with a space
+	sed '/^#/d' "$CONFIG_FILE" | sed '/^ /d' | sed '/^$/d'
+}
+
+do_notify() {
+
+	MESSAGE="$1"
+
+	check_readable_file "$PUSHOVER_CONFIG"
+
+	USER_KEY="$( read_config "$PUSHOVER_CONFIG" | grep USER_KEY | cut -d \" -f 2 )"
+	APP_TOKEN="$( read_config "$PUSHOVER_CONFIG" | grep APP_TOKEN | cut -d \" -f 2 )"
+	
+	case $DEBUG in
+		"FALSE")
+			curl -s \
+			--form-string "token=$APP_TOKEN" \
+			--form-string "user=$USER_KEY" \
+			--form-string "message=$MESSAGE" \
+			https://api.pushover.net/1/messages.json > /dev/null
+			echo
+			;;
+		"TRUE")
+			printf "\e[34m-!>\e[0m Debugging \e[34m%s\e[0m function:\n" 'do_notify'
+			printf "         USER_KEY : %s\n" "$USER_KEY"
+			printf "        APP_TOKEN : %s\n" "$APP_TOKEN"
+			printf "          MESSAGE : %s\n" "$MESSAGE"
+			;;
+	esac
+}
+
+do_backup() {
+
+	# remove the rightmost slash on the path to avoid any rsync unexpected behaviour  
+	SYNC_PATH="$( echo "$1" | sed 's/\/$//' )"
+
+	case $RESTORE in
+		"FALSE")
+			SRC="$SYNC_PATH/"
+			case $LOCAL in
+				"FALSE")
+					DST="$BACKUP_HOST:$SYNC_PATH"
+					;;
+				"TRUE")
+					# won't be syncing the seafile folder locally. Export each library, instead
+					if [ ! -z "$( echo $SYNC_PATH | grep seafile )" ];
+					then
+						printf "\e[31m-!>\e[0m Skipping \e[31mseafile\e[0m folder during local backup. Use \e[31mseafilectl\e[0m instead\n"
+						exit 1
+					fi
+					DST="$BACKUP_PATH$SYNC_PATH"
+					[ "$ITERATION" != "TRUE" ] && RSYNC_OPTIONS="$RSYNC_OPTIONS --inplace"
+					;;
+			esac
+			;;
+		"TRUE")
+			case $LOCAL in
+				"FALSE")
+					SRC="$BACKUP_HOST:$SYNC_PATH/"
+					;;
+				"TRUE")
+					# won't be syncing the seafile folder locally. Export each library, instead
+					if [ ! -z "$( echo $SYNC_PATH | grep seafile )" ];
+					then
+						printf "\e[31m-!>\e[0m Skipping \e[31mseafile\e[0m folder during local backup. Use \e[31mseafilectl\e[0m instead\n"
+						exit 1
+					fi
+					SRC="$BACKUP_PATH$SYNC_PATH/"
+					[ "$ITERATION" != "TRUE" ] && RSYNC_OPTIONS="$RSYNC_OPTIONS --inplace"
+					;;
+			esac
+			DST="$SYNC_PATH"
+			;;
+	esac
+
+
+	case $DEBUG in
+		"FALSE")
+			# add the "--delete" rsync options if needed
+			[ "$ITERATION" != "TRUE" ] && [ $DELETE = "TRUE" ] && RSYNC_OPTIONS="$RSYNC_OPTIONS $RSYNC_DELETE"
+			rsync $RSYNC_OPTIONS "$SRC" "$DST"
+			;;
+		"TRUE")
+			printf "\e[34m-!>\e[0m Debugging \e[34m%s\e[0m function:\n" 'do_backup'
+			printf "    \e[34m>\e[0m rsync %s " "$RSYNC_OPTIONS"
+			[ "$DELETE" = "TRUE" ] && printf "%s " $RSYNC_DELETE
+			printf "%s %s\n" $SRC $DST
+			;;
+	esac
+
+	# notify to te user via Pushover
+
+	STRING="folder $( echo $SRC | sed 's/\/$//' ) succesfully backed up"
+	case $LOCAL in
+		"FALSE")
+			STRING="$STRING on server $BACKUP_HOST"
+			;;
+		"TRUE")
+			STRING="$STRING on folder $BACKUP_PATH"
+			;;
+	esac
+
+	[ "$NOTIFY" = "TRUE" ] && do_notify "$STRING"
+}
+
+do_batch_backup() {
+
+	# check for the list of paths to be backed up
+	check_readable_file "$BACKUP_LIST"
+
+	for f in $( read_config "$BACKUP_LIST" );
+	do
+
+		case $LOCAL in
+			"FALSE")
+				printf "\e[33m-->\e[0m Syncing folder \e[33m%s\e[0m " "$f"
+				case $RESTORE in
+					"FALSE")
+						printf "to "
+						;;
+					"TRUE")
+						printf "from "
+						;;
+				esac
+				printf "the \e[33m%s\e[0m server\n" "$BACKUP_HOST"
+				;;
+			"TRUE")
+				printf "\e[33m-->\e[0m Syncing folder \e[33m%s\e[0m to local filesystem in \e[33m%s\e[0m \n" "$f" "$BACKUP_PATH"
+				;;
+		esac
+
+		do_backup $f
+
+		# this auxiliary variable will let any further subfunctions 
+		# that they're called within a loop AFTER an initial first iteration
+		ITERATION="TRUE"
+
+	done
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main block
+# ---------------------------------------------------------------------------------------
+
+main() {
+	check_args "$@"
+	defaults
+	check_essentials
+	# build_syntax
+	version
+	action
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main call
+# ---------------------------------------------------------------------------------------
+
+main "$@"

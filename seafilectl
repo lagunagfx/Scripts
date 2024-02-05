@@ -14,11 +14,6 @@
 #  ChangeLog
 # ---------------------------------------------------------------------------------------
 #
-#  2020.02.03 | 1st revision of this template
-#  2021.11.12 | Refactoring all scattered changes into this format
-#  2021.11.21 | Further refactoring of "standard" base functions
-#  2022.03.20 | Improved colors, output, versioning and pseudo-boolean types
-#  2023.10.08 | Dropping the '==' string comparison in favor of '=' in bash
 #  2023.10.10 | Tuning up the DEBUG mode and the user defined functions
 #
 # ---------------------------------------------------------------------------------------
@@ -28,17 +23,22 @@
 SCRIPT_NAME=$( basename $0 )
 SCRIPT_VERSION="2023.12.08"
 
+SEAFILE_USER="doctorbarrientos@gmail.com"
+SEAFILE_SERVER="/opt/seafile/seafile-server-latest"
+SEAFILE_LIBRARIES="$HOME/Documentos/Private/config/lagunagfx/seafile.list"
+
 # ---------------------------------------------------------------------------------------
 #  Base functions
 # ---------------------------------------------------------------------------------------
 
 usage() {
-	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "usage: %s [-hv] [--debug] -p <path-to-export> <library_id>\n" $SCRIPT_NAME
 	printf "         --debug          developer mode\n"
 	printf "   -h,   --help           show this help message\n"
 	printf "   -v,   --verbose        verbose mode\n"
 	printf "         --version        show current version\n"
-	printf "         --test           an empty example \'test\' action\n"
+	printf "   -e,   --export         export a seafile library to disk\n"
+	printf "         --batch-export   export all unencrypted libraries in the server\n"
 }
 
 version() {
@@ -87,10 +87,13 @@ check_args() {
 defaults() {
 	DEFAULT_DEBUG="FALSE"
 	DEFAULT_LAST_ARGUMENT_NEEDED="FALSE"
+	DEFAULT_BATCH_RENAME="TRUE"
 
 	# conditional oneliners ( if/then/else == []/&&/|| )
-	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
-	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="$DEFAULT_LAST_ARGUMENT_NEEDED"
+	[ -z "$DEBUG" ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z "$LAST_ARGUMENT_NEEDED" ] && LAST_ARGUMENT_NEEDED="$DEFAULT_LAST_ARGUMENT_NEEDED"
+	[ -z "$BATCH_RENAME" ] && BATCH_RENAME="$DEFAULT_BATCH_RENAME"
+
 }
 
 user_args() {
@@ -99,8 +102,17 @@ user_args() {
 		"-v"|"--verbose")
 			VERBOSE="TRUE"
 			;;
-		"--example")
-			ACTION="example"
+		"-e"|"--export")
+			ACTION="export"
+			EXPORT_PATH_NEEDED="TRUE"
+			LAST_ARGUMENT_NEEDED="TRUE"
+			;;
+		"--batch-export")
+			ACTION="batch_export"
+			EXPORT_PATH_NEEDED="TRUE"
+			;;
+		"-p"|"--path")
+			check_folder "$2" && EXPORT_PATH="$( echo $2 | sed 's/\/$//' )"
 			;;
 		*)
 			if [ $# -eq 1 ];
@@ -112,27 +124,33 @@ user_args() {
 }
 
 check_essentials() {
+
+	if [ "$EXPORT_PATH_NEEDED" = "TRUE" ];
+	then
+		if [ -z "$EXPORT_PATH" ];
+		then
+			printf "\e[31m-!> ERROR:\e[0m You must provide a valid path to export files (use the -p option).\n"
+			exit 1
+		fi
+	fi
+
 	if [ "$LAST_ARGUMENT_NEEDED" = "TRUE" ];
 	then
 		if [ -z "$LAST_ARGUMENT" ];
 		then
 			printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
 			exit 1
-		else
-			# check if a file called as $LAST_ARGUMENT exists and is readable
-			if [ ! -r "$LAST_ARGUMENT" ];
-			then
-				printf "\e[31m-!>\e[0m File not found or not readable : \e[31m%s\e[0m\n" $LAST_ARGUMENT
-				exit 1
-			fi
 		fi
 	fi
 }
 
 action() {
 	case $ACTION in 
-		"example")
-			do_example
+		"export")
+			do_export_library $LAST_ARGUMENT
+			;;
+		"batch_export")
+			do_batch_export
 			;;
 		*)
 			printf "\e[31m-!> ERROR:\e[0m ACTION variable \e[31m%s\e[0m not recognised\n" "$ACTION"
@@ -151,7 +169,7 @@ check_readable_file() {
 
 	if [ ! -r "$TEST_FILE" ];
 	then
-		printf "\e[31m-!> ERROR:\e[0m file \e[31m%s\e[0m not found or readable.\n" "$TEST_FILE"
+		printf "\e[31m-!> ERROR:\e[0m file \e[31m%s\e[0m not found.\n" "$TEST_FILE"
 		exit 1
 	fi
 }
@@ -175,16 +193,58 @@ read_config() {
 	sed '/^#/d' "$CONFIG_FILE" | sed '/^ /d' | sed '/^$/d'
 }
 
-do_example() {
+do_export_library() {
+
+	LIBRARY_ID="$1"
+
 	case $DEBUG in
 		"FALSE")
+			"$SEAFILE_SERVER"/seaf-fsck.sh --export "$EXPORT_PATH" "$LIBRARY_ID"
 			;;
-
 		"TRUE")
-			printf "\e[34m-!>\e[0m Debugging \e[34m%s\e[0m function:\n" 'do_example'
-			printf "    \e[34m>\e[0m example line\n"
+			printf "\e[34m-!>\e[0m Debugging function \e[34m%s\e[0m :\n" 'do_export_library'
+			printf "    \e[34m>\e[0m seaf-fsck.sh --export %s %s \n" "$EXPORT_PATH" "$LIBRARY_ID"
 			;;
 	esac
+}
+
+do_batch_export() {
+	
+	check_readable_file "$SEAFILE_LIBRARIES"
+	for line in $( read_config "$SEAFILE_LIBRARIES" );
+	do
+		LIBRARY_ID=$( echo "$line" | cut -d , -f 1 | tr -d '"' )
+		LIBRARY_NAME=$( echo "$line" | cut -d \, -f 2 | cut -d " " -f 1 | tr -d '"' )
+		LIBRARY_PATH="$EXPORT_PATH"/"$( echo $LIBRARY_ID | cut -d '-' -f 1 )"_"$( echo $LIBRARY_NAME | tr _ ' ' )"_"$SEAFILE_USER"
+
+		if [ $DEBUG = "TRUE" ];
+		then
+				printf "\e[34m-!>\e[0m Debugging function \e[34m%s\e[0m :\n" 'do_batch_export'
+				printf "    \e[34m>\e[0m variable LIBRARY_NAME : %s \n" "$LIBRARY_NAME"
+				printf "    \e[34m>\e[0m variable LIBRARY_PATH : %s \n" "$LIBRARY_PATH"
+		fi
+
+		do_export_library "$LIBRARY_ID"
+
+		# ls -l "$LIBRARY_PATH" | sed 's/^/      /'
+
+		if [ "$BATCH_RENAME" = "TRUE" ];
+		then
+			SRC=$LIBRARY_PATH
+			DST="$EXPORT_PATH"/"$LIBRARY_NAME"
+			case $DEBUG in
+				"FALSE")
+					mv -v "$SRC" "$DST" | sed 's/^/    /'
+					;;
+				"TRUE")
+					printf "    \e[34m>\e[0m rename output\n"
+					printf "        from %s\n" "$SRC"
+					printf "          to %s\n" "$DST"
+					;;
+			esac
+		fi
+
+	done
 }
 
 # ---------------------------------------------------------------------------------------
