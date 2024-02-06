@@ -21,10 +21,18 @@
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
-SCRIPT_VERSION="2023.05.24"
+SCRIPT_VERSION="2024.02.06"
 
-CLIENT_BASE_PATH="$HOME/Sync/Amiga"
-SERVER_BASE_PATH="$HOME/Gaming/Commodore Amiga"
+SERVER=www.lagunagfx.eu
+SERVER_PATH="$SERVER:Sync/filesystem"
+
+MACOS_PATH="Documents"
+LINUX_PATH="Documentos"
+
+AMIGA_PATH="FS-UAE"
+AMIGA_TREE="Configurations Floppies Hard_Drives Kickstarts"
+
+RSYNC_OPTS="-avP --protect-args"
 
 # ---------------------------------------------------------------------------------------
 #  Base functions
@@ -32,6 +40,7 @@ SERVER_BASE_PATH="$HOME/Gaming/Commodore Amiga"
 
 usage() {
 	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "         amiga            sync FS-UAE emulator directory tree\n\n"
 	printf "         --debug          developer mode\n"
 	printf "   -h,   --help           show this help message\n"
 	printf "   -v,   --verbose        verbose mode\n"
@@ -39,7 +48,7 @@ usage() {
 }
 
 version() {
-	printf "* \e[33m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
+	printf "  * \e[33m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
 }
 
 check_args() {
@@ -96,11 +105,24 @@ user_args() {
 		"-v"|"--verbose")
 			VERBOSE="TRUE"
 			;;
+		"-u"|"--upload")
+			ACTION="UPLOAD"
+			;;
+		"-d"|"--download")
+			ACTION="DOWNLOAD"
+			;;
 		*)
 			if [ $# -eq 1 ];
 			then
 				LAST_ARGUMENT="$1"		
 			fi
+
+			case $LAST_ARGUMENT in
+				"amiga")
+					SYSTEM="$AMIGA_PATH"
+					TREE="$AMIGA_TREE"
+					;;
+			esac
 			;;
 	esac
 }
@@ -110,30 +132,52 @@ check_essentials() {
 	then
 		printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
 		exit 1
-	else
-		if [ ! -r "$LAST_ARGUMENT" ];
-		then
-			printf "\e[31m-!>\e[0m File not found or not readable : \e[31m%s\e[0m\n" $LAST_ARGUMENT
-			exit 1
-		fi
 	fi
 }
 
-action() {
-	# Execute standard OR debug version of the script
-	if [ "$DEBUG" == "FALSE" ];
-	then
-		echo "A line that test an empty script"
-		# Do Something !!!
-	else
-		printf "\e[31m-!>\e[0m Running in \e[31mDEBUG\e[0m mode\n\n" $SCRIPT_NAME
-	fi
+action() {	
+	do_sync
 }
+
 
 # ---------------------------------------------------------------------------------------
 #  User defined functions
 # ---------------------------------------------------------------------------------------
 
+do_sync() {
+
+	CLIENT="$HOME/$LINUX_PATH/$SYSTEM"
+	SERVER="$SERVER_PATH/$SYSTEM"
+
+	case $ACTION in
+		"UPLOAD")
+			SRC="$CLIENT"
+			DST="$SERVER"
+			;;
+		"DOWNLOAD")
+			SRC="$SERVER"
+			DST="$CLIENT"
+			;;
+	esac
+				
+	# rsync invocation
+	for t in $TREE;
+	do
+		# fix whitespaces
+		t=$( printf "%s" $t | tr '_' '\ ' )
+		case $DEBUG in
+			"FALSE")
+				rsync $RSYNC_OPTS "$SRC/$t" "$DST"/
+				;;
+			"TRUE")
+				printf "\e[34m-!>\e[0m Debugging %s function:\n\n" 'do_sync'
+				printf "    RSYNC_OPS : %s\n" "$RSYNC_OPTS" 
+				printf "          SRC : %s\n" "$SRC/$t" 
+				printf "          DST : %s\n\n" "$DST"
+				;;
+		esac
+	done
+}
 
 # ---------------------------------------------------------------------------------------
 #  Main block
