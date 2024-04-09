@@ -20,6 +20,7 @@ usage() {
 	printf "           --debug   developer's mode\n"
 	printf "commands:\n"
 	printf "    list-orphans     pacman -Qtdq\n"
+	printf "    mirrorlist       sudo pacman-mirrors -ga --continent"
 	printf "    provides         pacman -F\n"
 	printf "    provides-exact   pacman -Fx (full path)\n"
 	printf "    refresh-database pacman -Fy\n"
@@ -37,6 +38,9 @@ user_args() {
 	case $1 in
 		"list-orphans")
 			pacman -Qtdq
+			;;
+		"mirrorlist")
+			sudo pacman-mirrors -ga --continent
 			;;
 		"provides")
 			pacman -F $2
