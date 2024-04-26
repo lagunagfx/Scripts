@@ -32,7 +32,7 @@
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
-SCRIPT_VERSION="2022.10.02"
+SCRIPT_VERSION="2024.03.15"
 
 # ---------------------------------------------------------------------------------------
 #  Base functions
@@ -102,7 +102,8 @@ defaults() {
 	# user defined defaults
 	DEFAULT_DELETE="TRUE"
 	[ -z $DELETE ] && DELETE="$DEFAULT_DELETE"
-	SWAP_FOLDER="$HOME/.local/share/nvim/swap"
+	# SWAP_FOLDER="$HOME/.local/share/nvim/swap"
+	SWAP_FOLDER="$HOME/.local/state/nvim/swap"
 }
 
 user_args() {

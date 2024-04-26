@@ -21,10 +21,13 @@
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
-SCRIPT_VERSION="2024.02.06"
+SCRIPT_VERSION="2024.02.19"
 
 SERVER=www.lagunagfx.eu
-SERVER_PATH="$SERVER:Sync/filesystem"
+SERVER_PATH="$SERVER:Sync"
+
+#SERVER_PATH="$SERVER:Sync/filesystem" only for Amiga now
+#let's keep the WINEPREFIXES isolated
 
 MACOS_PATH="Documents"
 LINUX_PATH="Documentos"
@@ -34,17 +37,22 @@ AMIGA_TREE="Configurations Floppies Hard_Drives Kickstarts"
 
 RSYNC_OPTS="-avP --protect-args"
 
+WINEPREFIX="$HOME/.local/share/wineprefix"
+WINECELLAR="$SERVER_PATH/winecellar"
+
 # ---------------------------------------------------------------------------------------
 #  Base functions
 # ---------------------------------------------------------------------------------------
 
 usage() {
-	printf "usage: %s [-h]\n" $SCRIPT_NAME
-	printf "         amiga            sync FS-UAE emulator directory tree\n\n"
+	printf "usage: %s [-h] <SYSTEM>\n" $SCRIPT_NAME
 	printf "         --debug          developer mode\n"
 	printf "   -h,   --help           show this help message\n"
 	printf "   -v,   --verbose        verbose mode\n"
 	printf "         --version        show current version\n"
+	printf "\nAvailable systems are\n\n"
+	printf "         amiga            sync FS-UAE emulator directory tree\n"
+	printf "         windows          sync WINE wineprefixes\n"            
 }
 
 version() {
@@ -122,6 +130,11 @@ user_args() {
 					SYSTEM="$AMIGA_PATH"
 					TREE="$AMIGA_TREE"
 					;;
+				"windows")
+					SERVER_PATH="$SERVER_PATH/winecellar"
+				    CLIENT_PATH="$WINEPREFIX"
+					TREE="win10_plugins"
+					;;
 			esac
 			;;
 	esac
@@ -139,15 +152,14 @@ action() {
 	do_sync
 }
 
-
 # ---------------------------------------------------------------------------------------
 #  User defined functions
 # ---------------------------------------------------------------------------------------
 
 do_sync() {
 
-	CLIENT="$HOME/$LINUX_PATH/$SYSTEM"
-	SERVER="$SERVER_PATH/$SYSTEM"
+	CLIENT="$CLIENT_PATH"
+	SERVER="$SERVER_PATH"
 
 	case $ACTION in
 		"UPLOAD")
@@ -164,7 +176,7 @@ do_sync() {
 	for t in $TREE;
 	do
 		# fix whitespaces
-		t=$( printf "%s" $t | tr '_' '\ ' )
+		# t=$( printf "%s" $t | tr '_' '\ ' )
 		case $DEBUG in
 			"FALSE")
 				rsync $RSYNC_OPTS "$SRC/$t" "$DST"/
@@ -172,8 +184,8 @@ do_sync() {
 			"TRUE")
 				printf "\e[34m-!>\e[0m Debugging %s function:\n\n" 'do_sync'
 				printf "    RSYNC_OPS : %s\n" "$RSYNC_OPTS" 
-				printf "          SRC : %s\n" "$SRC/$t" 
-				printf "          DST : %s\n\n" "$DST"
+				printf "          SRC : %s\n" "$SRC/$t/" 
+				printf "          DST : %s\n\n" "$DST/$t"
 				;;
 		esac
 	done
