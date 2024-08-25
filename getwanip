@@ -1,0 +1,163 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# Get my WAN IP from an external server
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+#  2024.04.29 | 1st draft
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="2024.04.29"
+
+IPSERVER="https://ifconfig.me/ip"
+
+# ---------------------------------------------------------------------------------------
+#  Base functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "         --debug          developer mode\n"
+	printf "   -n,   --no-newline     don't add a new line jump at the end (useful for tmux)\n"
+	printf "   -h,   --help           show this help message\n"
+	printf "         --version        show current version\n"
+}
+
+version() {
+	printf "  * \e[33m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
+}
+
+check_args() {
+	# one or more arguments are used
+	while [ "$1" ];
+	do
+		# list of accepted arguments
+		case "$1" in
+			# default help option
+			"-h"|"--help")
+				usage
+				exit 0
+				;;
+			"--version")
+				version
+				exit 0
+				;;
+			"--debug")
+				DEBUG="TRUE"
+				;;
+			# all user defined opts handled by user_args
+			*)
+				user_args "$@"
+				;;
+		esac
+		# removes the first item from the list of given arguments ('$@')
+		shift
+	done	
+}
+
+# ---------------------------------------------------------------------------------------
+#  Standard Functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEFAULT_DEBUG="FALSE"
+	DEFAULT_LAST_ARGUMENT_NEEDED="FALSE"
+	DEFAULT_NEWLINE="TRUE"
+
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="$DEFAULT_LAST_ARGUMENT_NEEDED"
+	[ -z $NEWLINE ] && NEWLINE="$DEFAULT_NEWLINE"
+}
+
+user_args() {
+	case $1 in
+		# insert user defined parameters
+		"-n"|"--no-newline")
+			NEWLINE="FALSE"
+			;;
+		*)
+			if [ $# -eq 1 ];
+			then
+				LAST_ARGUMENT="$1"		
+			fi
+			;;
+	esac
+}
+
+check_essentials() {
+	if [ "$LAST_ARGUMENT_NEEDED" == "TRUE" ];
+	then
+		if [ -z "$LAST_ARGUMENT" ];
+		then
+			printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
+			exit 1
+		else
+			# check if a file called as $LAST_ARGUMENT exists and is readable
+			if [ ! -r "$LAST_ARGUMENT" ];
+			then
+				printf "\e[31m-!>\e[0m File not found or not readable : \e[31m%s\e[0m\n" $LAST_ARGUMENT
+				exit 1
+			fi
+		fi
+	fi
+}
+
+action() {
+	do_getwanip
+}
+
+# ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+
+do_getwanip() {
+	case $DEBUG in
+		"FALSE")
+			;;
+
+		"TRUE")
+			printf "\e[34m-!>\e[0m Debugging \e[34m%s\e[0m function:\n" 'do_getwanip'
+			printf "    \e[34m>\e[0m provider : %s\n" "$IPSERVER"
+			printf "    \e[34m>\e[0m   WAN IP : "
+			;;
+	esac
+
+	curl "$IPSERVER"
+
+	[ "$NEWLINE" == "TRUE" ] && printf "\n"
+
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main block
+# ---------------------------------------------------------------------------------------
+
+main() {
+	check_args "$@"
+	defaults
+	check_essentials
+	# build_syntax
+	[ "$DEBUG" == "TRUE" ] && version
+	action
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main call
+# ---------------------------------------------------------------------------------------
+
+main "$@"
