@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------------------
 #
 # Description:
-# Quicksync uses changes changes to upload and download relatively
+# Converts from .adf Amiga floppy disk image files to gzipped compressed .adz format
 #
 # Author:
 # Jorge Barrientos Poisson
@@ -14,7 +14,7 @@
 #  ChangeLog
 # ---------------------------------------------------------------------------------------
 #
-#  2023.05.24 | 1st draft
+#  2024.08.24 | 1st revision of this template
 #
 # ---------------------------------------------------------------------------------------
 #  Variables and Settings
@@ -23,39 +23,17 @@
 SCRIPT_NAME=$( basename $0 )
 SCRIPT_VERSION="2024.08.24"
 
-RSYNC_OPTS="-avP --protect-args"
-RSYNC_DELETE="--delete-after"
-
-SERVER=www.lagunagfx.com
-SERVER_PATH="$SERVER:Sync"
-
-#let's keep the WINEPREFIXES isolated
-
-MACOS_PATH="Documents"
-LINUX_PATH="Documentos"
-
-AMIGA_PATH="FS-UAE"
-AMIGA_TREE="Configurations Floppies Hard_Drives Kickstarts"
-
-WINEPREFIX="$HOME/.local/share/wineprefix"
-WINECELLAR="$SERVER_PATH/winecellar"
-
 # ---------------------------------------------------------------------------------------
 #  Base functions
 # ---------------------------------------------------------------------------------------
 
 usage() {
-	printf "usage: %s [-h|v] <ACTION> <SYSTEM>\n" $SCRIPT_NAME
+	printf "usage: %s [-h]\n" $SCRIPT_NAME
 	printf "         --debug          developer mode\n"
 	printf "   -h,   --help           show this help message\n"
 	printf "   -v,   --verbose        verbose mode\n"
-	printf "         --delete         delete old files after syncronization"
 	printf "         --version        show current version\n"
-	printf "   -u,   --upload         send files to server\n"
-	printf "   -d,   --download       get files from server\n"
-	printf "\nAvailable systems are\n\n"
-	printf "         amiga            sync FS-UAE emulator directory tree\n"
-	printf "         windows          sync WINE wineprefixes\n"            
+	printf "         --compress       compress an Amiga Disk File [.adf] file\n"
 }
 
 version() {
@@ -103,13 +81,11 @@ check_args() {
 
 defaults() {
 	DEFAULT_DEBUG="FALSE"
-	DEFAULT_LAST_ARGUMENT_NEEDED="FALSE"
-	DEFAULT_DELETE="FALSE"
+	DEFAULT_LAST_ARGUMENT_NEEDED="TRUE"
 
 	# conditional oneliners ( if/then/else == []/&&/|| )
 	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
-	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="DEFAULT_LAST_ARGUMENT_NEEDED"
-	[ -z DELETE ] && DELETE="$DEFAULT_DELETE"
+	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="$DEFAULT_LAST_ARGUMENT_NEEDED"
 }
 
 user_args() {
@@ -118,102 +94,83 @@ user_args() {
 		"-v"|"--verbose")
 			VERBOSE="TRUE"
 			;;
-		"-u"|"--upload")
-			ACTION="UPLOAD"
-			;;
-		"-d"|"--download")
-			ACTION="DOWNLOAD"
-			;;
-		"--delete")
-			DELETE="TRUE"
+		"-c"|"--compress")
+			ACTION="compress"
 			;;
 		*)
 			if [ $# -eq 1 ];
 			then
 				LAST_ARGUMENT="$1"		
 			fi
-
-			case $LAST_ARGUMENT in
-				"amiga")
-					SERVER_PATH="$SERVER_PATH/filesystem/$AMIGA_PATH"
-
-					case $( uname -s ) in
-						"Linux")
-							CLIENT_PATH="$HOME/$LINUX_PATH/$AMIGA_PATH"
-							;;
-					esac
-
-					SYSTEM="$AMIGA_PATH"
-					TREE="$AMIGA_TREE"
-					;;
-				"windows")
-					SERVER_PATH="$SERVER_PATH/winecellar"
-				    CLIENT_PATH="$WINEPREFIX"
-					TREE="win10_plugins"
-					;;
-			esac
 			;;
 	esac
 }
 
 check_essentials() {
-	if [ -z "$LAST_ARGUMENT" ];
+	if [ "$LAST_ARGUMENT_NEEDED" = "TRUE" ];
 	then
-		printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
-		exit 1
+		if [ -z "$LAST_ARGUMENT" ];
+		then
+			printf "\e[31m-!> ERROR:\e[0m A file must be specified\n"
+			exit 1
+		else
+			# check if a file called as $LAST_ARGUMENT exists and is readable
+			check_readable_file "$LAST_ARGUMENT" && FILE="$LAST_ARGUMENT"
+		fi
 	fi
 }
 
-action() {	
-	do_sync
+action() {
+	case "$ACTION" in 
+		"compress")
+			do_compress "$FILE"
+			;;
+		*)
+			printf "\e[31m-!> ERROR:\e[0m ACTION variable \e[31m%s\e[0m not recognised\n" "$ACTION"
+			exit 1
+			;;
+	esac
 }
 
 # ---------------------------------------------------------------------------------------
 #  User defined functions
 # ---------------------------------------------------------------------------------------
 
-do_sync() {
+check_readable_file() {
 
-	if [ "$DELETE" == "TRUE" ];
+	TEST_FILE="$1"
+
+	if [ ! -r "$TEST_FILE" ];
 	then
-		RSYNC_OPTS="$RSYNC_OPTS $RSYNC_DELETE"
-		if [ "$VERBOSE" == TRUE ];
-		then
-			printf "\e[31m-->\e[0m Using rsync's \e[31m%s\e[0m mode\n" $RSYNC_DELETE
-		fi
+		printf "\e[31m-!> ERROR:\e[0m file \e[31m%s\e[0m not found or readable.\n" "$TEST_FILE"
+		exit 1
+	fi
+}
+
+check_folder() {
+
+	TEST_FOLDER="$1"
+
+	if [ ! -r "$TEST_FOLDER" ];
+	then
+		printf "\e[31m-!> ERROR:\e[0m folder \e[31m%s\e[0m not found.\n" "$TEST_FOLDER"
+		exit 1
+	fi
+}
+
+do_compress() {
+	FILE_ADF="$1"
+	FILE_ADZ=$( basename "$FILE_ADF" .adf ).adz
+	FULLPATH=$( dirname "$FILE_ADF" )
+
+	gzip -9 "$FILE_ADF"
+
+	if [ "$VERBOSE" == "TRUE" ];
+	then
+		printf "\e[33m-->\e[0m Compressing \e[35m%s\e[0m to %s\n" "$FILE_ADF" "$FILE_ADZ" 
 	fi
 
-	CLIENT="$CLIENT_PATH"
-	SERVER="$SERVER_PATH"
-
-	case $ACTION in
-		"UPLOAD")
-			SRC="$CLIENT"
-			DST="$SERVER"
-			;;
-		"DOWNLOAD")
-			SRC="$SERVER"
-			DST="$CLIENT"
-			;;
-	esac
-				
-	# rsync invocation
-	for t in $TREE;
-	do
-		# fix whitespaces
-		t=$( printf "%s" $t | tr '_' '\ ' )
-		case $DEBUG in
-			"FALSE")
-				rsync $RSYNC_OPTS "$SRC/$t" "$DST"/
-				;;
-			"TRUE")
-				printf "\e[34m-!>\e[0m Debugging %s function:\n\n" 'do_sync'
-				printf "    RSYNC_OPS : %s\n" "$RSYNC_OPTS" 
-				printf "          SRC : %s\n" "$SRC/$t/" 
-				printf "          DST : %s\n\n" "$DST/$t"
-				;;
-		esac
-	done
+	mv "$FILE_ADF".gz "$FULLPATH"/"$FILE_ADZ" 
 }
 
 # ---------------------------------------------------------------------------------------
@@ -224,8 +181,7 @@ main() {
 	check_args "$@"
 	defaults
 	check_essentials
-	# build_syntax
-	version
+	version # first actual output to the screen
 	action
 }
 
