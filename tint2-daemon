@@ -1,0 +1,27 @@
+#!/bin/sh
+
+VERBOSE=false
+
+while :
+do
+
+	PID=$( pgrep -x tint2 )
+
+	[ $VERBOSE = true ] && printf "\e[34m-->\e[0m PID %s\n" $PID
+
+	if [ -z "$PID" ];
+	then
+		printf "\e[33m-->\e[0m Starting %s at %s\n" tint2 $( date +%H:%m:%S )
+		env G_SLICE=always-malloc tint2 &
+
+		[ -z "$( pgrep -x nm-applet)" ] && nm-applet &
+		[ -z "$( pgrep -x volumeicon)" ] && volumeicon &
+		[ -z "$( pgrep -x xfce4-clipman)" ] && xfce4-clipman &
+		[ -z "$( pgrep -x blueman-tray)" ] && blueman-tray &		
+	else
+		[ "$VERBOSE" = true ] && printf "Waiting ...\n"
+	fi
+
+	sleep 10
+
+done
