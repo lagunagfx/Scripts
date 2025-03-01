@@ -21,6 +21,7 @@ usage() {
 	printf "commands:\n"
 	printf "    list-orphans     pacman -Qtdq\n"
 	printf "    mirrorlist       sudo pacman-mirrors -ga --continent\n"
+	printf "    not-required     pacman -Qtdq\n"
 	printf "    provides         pacman -F\n"
 	printf "    provides-exact   pacman -Fx (full path)\n"
 	printf "    refresh-database pacman -Fy\n"
@@ -41,6 +42,9 @@ user_args() {
 			;;
 		"mirrorlist")
 			sudo pacman-mirrors -ga --continent
+			;;
+		"not-required")
+			sudo pacman -Qtdq
 			;;
 		"provides")
 			pacman -F $2

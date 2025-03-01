@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Define the options
+options="Shutdown\nReboot\nSleep"
+
+# Get the choice using Wofi
+choice=$(echo -e $options | wofi --dmenu --prompt="Power Options")
+
+# Execute the choice
+case $choice in
+  Shutdown)
+    systemctl poweroff
+    ;;
+  Reboot)
+    systemctl reboot
+    ;;
+  Sleep)
+    systemctl suspend
+    ;;
+  *)
+    ;;
+esac

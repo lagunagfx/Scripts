@@ -1,0 +1,219 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# This is a brief description of my script
+#
+# Author:
+# Jorge Barrientos Poisson
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+#  2025.02.10 | 1st quick draft of this script
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME=$( basename $0 )
+SCRIPT_VERSION="2024.02.10"
+
+PATH_SCREENSHOT="$HOME/Imágenes/screenshot"
+FILE_SCREENSHOT="$( hostname )_screenshot_$( date +%Y%m%d_%H%M_%S ).png"
+
+# ---------------------------------------------------------------------------------------
+#  Base functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "         --debug          developer mode\n"
+	printf "   -h,   --help           show this help message\n"
+	printf "   -v,   --verbose        verbose mode\n"
+	printf "         --version        show current version\n"
+}
+
+version() {
+	if [ "$QUIET" == "FALSE" ];
+	then
+		printf "  * \e[33m%s\e[0m version \e[33m%s\e[0m\n" $SCRIPT_NAME $SCRIPT_VERSION
+	fi
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--version")
+					version
+					exit 0
+					;;
+				"--debug")
+					DEBUG="TRUE"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Standard Functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEFAULT_DEBUG="FALSE"
+	DEFAULT_QUIET="TRUE"
+	DEFAULT_LAST_ARGUMENT_NEEDED="FALSE"
+
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z $QUIET ] && QUIET="$DEFAULT_QUIET"
+	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="$DEFAULT_LAST_ARGUMENT_NEEDED"
+}
+
+user_args() {
+	case $1 in
+		# insert user defined parameters
+		"-v"|"--verbose")
+			VERBOSE="TRUE"
+			QUIET="FALSE"
+			;;
+		"--now")
+			ACTION="take_screenshot"
+			;;
+		*)
+			if [ $# -eq 1 ];
+			then
+				LAST_ARGUMENT="$1"		
+			fi
+			;;
+	esac
+}
+
+check_essentials() {
+	if [ "$LAST_ARGUMENT_NEEDED" = "TRUE" ];
+	then
+		if [ -z "$LAST_ARGUMENT" ];
+		then
+			printf "\e[31m-!> ERROR:\e[0m A last argument must be specified\n"
+			exit 1
+		else
+			# check if a file called as $LAST_ARGUMENT exists and is readable
+			if [ ! -r "$LAST_ARGUMENT" ];
+			then
+				printf "\e[31m-!>\e[0m File not found or not readable : \e[31m%s\e[0m\n" $LAST_ARGUMENT
+				exit 1
+			fi
+		fi
+	fi
+}
+
+action() {
+	case $ACTION in 
+		"take_screenshot")
+			take_screenshot
+			;;
+		*)
+			printf "\e[31m-!> ERROR:\e[0m ACTION variable \e[31m%s\e[0m not recognised\n" "$ACTION"
+			exit 1
+			;;
+	esac
+}
+
+# ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+
+check_readable_file() {
+
+	TEST_FILE="$1"
+
+	if [ ! -r "$TEST_FILE" ];
+	then
+		printf "\e[31m-!> ERROR:\e[0m file \e[31m%s\e[0m not found or readable.\n" "$TEST_FILE"
+		exit 1
+	fi
+}
+
+check_folder() {
+
+	TEST_FOLDER="$1"
+
+	if [ ! -r "$TEST_FOLDER" ];
+	then
+		printf "\e[31m-!> ERROR:\e[0m folder \e[31m%s\e[0m not found.\n" "$TEST_FOLDER"
+		exit 1
+	fi
+}
+
+read_config() {
+
+	CONFIG_FILE="$1"
+	
+	# remove all empty lines and lines starting with a space
+	sed '/^#/d' "$CONFIG_FILE" | sed '/^ /d' | sed '/^$/d'
+}
+
+take_screenshot() {
+	case $DEBUG in
+		"FALSE")
+			;;
+
+		"TRUE")
+			printf "\e[34m-!>\e[0m Debugging \e[34m%s\e[0m function:\n" 'take_screenshot'
+			printf "    \e[34m>\e[0m example line\n"
+			;;
+	esac
+
+	case "$QUIET" in
+		"FALSE")
+			grimshot save screen "$PATH_SCREENSHOT/$FILE_SCREENSHOT"
+			;;
+		"TRUE")
+			grimshot save screen "$PATH_SCREENSHOT/$FILE_SCREENSHOT" > /dev/null 2>&1
+			;;
+	esac
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main block
+# ---------------------------------------------------------------------------------------
+
+main() {
+	check_args "$@"
+	defaults
+	check_essentials
+	# build_syntax
+	version
+	action
+}
+
+# ---------------------------------------------------------------------------------------
+#  Main call
+# ---------------------------------------------------------------------------------------
+
+main "$@"
