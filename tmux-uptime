@@ -4,31 +4,50 @@
 #
 # written by Jorge Barrientos AKA LagunaGFX
 
-extract() {
+check_os() {
+		OS=$( uname -s )
+}
+
+parse_uptime() {
+
+	local uptime="$( uptime | tr -d ' ' | cut -d , -f 1 | cut -d p -f 2 )"
+	printf "%s\n" $uptime
+}
+
+extract_prettyuptime() {
+
 	local word="$1"
 
 	if [ ! -z "$word" ];
 	then
+
 		local uptime="$( uptime --pretty | sed 's/up //' | grep "$word" | awk -F " $word" '{print $1}' | rev | cut -d " " -f1 | rev )"
+
 		if [ ! -z "$uptime" ];
 		then
 			local suffix=
 			printf "%s%s" $uptime $( echo "$word" | cut -b1 )
-	 		if [ "$word" != "minute" ];
-			then
-				printf " "
-			fi
+	 		[ "$word" != "minute" ] && printf " "
 		fi
+
 	fi
 }
 
 main() {
-	extract year
-	extract month
-	extract week
-	extract day
-	extract hour
-	extract minute
+	check_os
+	case "$OS" in
+		"Linux")
+			extract_prettyuptime year
+			extract_prettyuptime month
+			extract_prettyuptime week
+			extract_prettyuptime day
+			extract_prettyuptime hour
+			extract_prettyuptime minute
+			;;
+		"Darwin")
+			parse_uptime
+			;;
+	esac
 }
 
 main

@@ -1,0 +1,16 @@
+#!/bin/sh
+
+PREFS_USER="$HOME/Library/Preferences/com.native-instruments.Guitar Rig 6.plist"
+PREFS_SYSTEM="/Library/Preferences/com.native-instruments.Guitar Rig 6.plist"
+
+[ -r "$PREFS_USER" ] && rm -v "$PREFS_USER"
+[ -r "$PREFS_SYSTEM" ] && sudo rm -v "$PREFS_SYSTEM"
+
+PKG="com.native-instruments.GuitarRig6.SystemExtensions"
+
+PKG_VOLUME="$( pkgutil --pkg-info "$PKG" | grep ^volume: | cut -d ':' -f 2 | sed 's/^ *//' )"
+PKG_PATH="$( pkgutil --pkg-info "$PKG" | grep ^location: | cut -d ':' -f 2 | sed 's/^ *//' )"
+
+cd "$PKG_VOLUME$PKG_PATH"
+pkgutil --only-files --files "$PKG" | tr '\n' '\0' | xargs -n 1 -0 echo rm -ivf
+pkgutil --only-dirs --files "$PKG" | tr '\n' '\0' | xargs -n 1 -0 echo sudo rmdir -v
