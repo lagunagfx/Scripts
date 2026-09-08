@@ -1,0 +1,300 @@
+#!/bin/sh
+#
+# ---------------------------------------------------------------------------------------
+#  Description
+# ---------------------------------------------------------------------------------------
+#
+# Description:
+# Launch Microsoft Windows programs using Wine and their respective 'bottles'
+#
+# Author:
+# Jorge Barrientos AKA LagunaGFX
+#
+# ---------------------------------------------------------------------------------------
+#  ChangeLog
+# ---------------------------------------------------------------------------------------
+#
+#  2020.02.03 | 1st revision of this template
+#  2021.11.12 | Refactoring all scattered changes into this format
+#  2021.11.21 | Further refactoring of "standard" base functions
+#  2022.03.20 | Improved colors, output, versioning and pseudo-boolean types
+#
+# ---------------------------------------------------------------------------------------
+#  Variables and Settings
+# ---------------------------------------------------------------------------------------
+
+SCRIPT_NAME="wine-launcher"
+SCRIPT_VERSION="2026.08.27"
+
+CONFIG_FILE="$HOME/.config/wine/wine-launcher.conf"
+
+PATH_CELLAR="$HOME/.local/share/wineprefix"
+
+# ---------------------------------------------------------------------------------------
+#  ANSI Styling
+# ---------------------------------------------------------------------------------------
+
+none='\e[0m'
+red='\e[31m'
+yellow='\e[33m'
+magenta='\e[35m'
+cyan='\e[36m'
+
+error=$red
+debug=$magenta
+highlight=$cyan
+warning=$yellow
+
+tab_plain="--> "
+tab_blank="    "
+tab_error="$red-!> ERROR :$none "
+tab_debug="$magenta-->$none "
+tab_high="$cyan-->$none "
+tab_warning="$yellow-->$none "
+
+# ---------------------------------------------------------------------------------------
+#  Base functions
+# ---------------------------------------------------------------------------------------
+
+usage() {
+	printf "usage: %s [-h]\n" $SCRIPT_NAME
+	printf "         --debug          developer mode\n"
+	printf "   -h,   --help           show this help message\n"
+	printf "   -v,   --verbose        verbose mode\n"
+	printf "         --version        show current version\n"
+	printf "         --list           show all available bottles in the configuration file\n"
+	printf "   -l,   --launch         open preconfigured program\n"
+}
+
+version() {
+	printf "%b %b version %b\n" "$tab_plain" "$warning$SCRIPT_NAME$none" "$warning$SCRIPT_VERSION$none"
+}
+
+check_args() {
+	if [ $# -eq 0 ];
+	then
+		# script is called with zero arguments 
+		usage
+		exit 0
+	else
+		# one or more arguments are used
+		while [ "$1" ];
+		do
+			# list of accepted arguments
+			case "$1" in
+				# default help option
+				"-h"|"--help")
+					usage
+					exit 0
+					;;
+				"--version")
+					ACTION="version"
+					;;
+				"--debug")
+					DEBUG="TRUE"
+					;;
+				# all user defined opts handled by user_args
+				*)
+					user_args "$@"
+					;;
+			esac
+			# removes the first item from the list of given arguments ('$@')
+			shift
+		done	
+	fi
+}
+
+# ---------------------------------------------------------------------------------------
+#  Standard Functions
+# ---------------------------------------------------------------------------------------
+
+defaults() {
+	DEFAULT_DEBUG="FALSE"
+	DEFAULT_LAST_ARGUMENT_NEEDED="FALSE"
+
+	# conditional oneliners ( if/then/else == []/&&/|| )
+	[ -z $DEBUG ] && DEBUG="$DEFAULT_DEBUG"
+	[ -z $LAST_ARGUMENT_NEEDED ] && LAST_ARGUMENT_NEEDED="DEFAULT_LAST_ARGUMENT_NEEDED"
+}
+
+user_args() {
+	case $1 in
+		# insert user defined parameters
+		"-v"|"--verbose")
+			VERBOSE="TRUE"
+			;;
+		"--list")
+			ACTION="list"
+			;;
+		"-l"|"--launch")
+			ACTION="launch"
+			LAST_ARGUMENT_NEEDED="TRUE"
+			;;
+		*)
+			if [ $# -eq 1 ];
+			then
+				LAST_ARGUMENT="$1"		
+			fi
+			;;
+	esac
+}
+
+check_essentials() {
+	if [ "$LAST_ARGUMENT_NEEDED" == "TRUE" ];
+	then
+		if [ -z "$LAST_ARGUMENT" ];
+		then
+			printf "%bYou must provide a valid " "$tab_error"
+			case $ACTION in
+				"launch")
+					printf "Windows app from the list\n"
+					;;
+			esac
+			exit 1
+		fi
+	fi
+}
+
+# for all scripts that need a configuration file
+
+check_file() {
+	FILE="$1"
+	if [ -z "$1" ];
+	then
+		# the $CONFIG_FILE variable is not provided
+		printf "%binternal argument %bFILE%b is missing \n" "$tab_error" "$error" "$none"
+		exit 1
+	else
+		if [ ! -r $FILE ];
+		then
+			# configuration file is not found or not readable
+			printf "%bfile %b not found\n" "$tab_error" "$error$FILE$none"
+			exit 1
+		else
+			if [ "$DEBUG" == "TRUE" ];
+			then
+				printf "%b   config : %b found\n" "$tab_debug" "$debug$FILE$none"
+			fi
+			
+			# file exits but it is NOT of size greater than zero
+			if [ ! -s "$FILE" ];
+			then
+				# configuration file is present but empty
+				printf "%bfile %b is empty\n" "$tab_error" "$error$FILE$none"
+			fi
+		fi
+	fi
+}
+
+action() {
+	# Execute standard OR debug version of the script
+	case $ACTION in
+		"version")
+			version
+			exit 0
+			;;
+		"list")
+			check_file $CONFIG_FILE
+			printf "%bAvailable MS Windows configurations :\n" "$tab_plain" 
+			grep ".*{$" $CONFIG_FILE | sed 's/\ *{$//' | sed "s/^/$tab_blank/"
+			;;
+		"launch")
+			check_file $CONFIG_FILE
+			APP=$LAST_ARGUMENT
+			parse_config "$APP"
+			# check if full path generated from the configuration is readable
+			PATH_FULL="$PATH_PREFIX/$PATH_DRIVEC/$EXECUTABLE"
+			check_file "$PATH_FULL"
+			printf "%bLaunching %b \n" "$tab_high" "$highlight$PREFIX_DESCRIPTION$none"
+			# debugging 
+			if [ "$DEBUG" == "TRUE" ];
+			then
+				printf "%b   prefix : %b\n" "$tab_debug" "$debug$PATH_PREFIX$none"
+				printf "%b     path : %b\n" "$tab_debug" "$debug$PATH_DRIVEC$none"
+				printf "%b     exec : %b\n" "$tab_debug" "$debug$EXECUTABLE$none"
+			fi
+			# Actually launching WINE
+			env WINEDEBUG=-all WINEPREFIX="$PATH_PREFIX" wine "$PATH_FULL"
+			;;
+	esac
+}
+
+# ---------------------------------------------------------------------------------------
+#  User defined functions
+# ---------------------------------------------------------------------------------------
+	
+	# sed '/^#/d' 					removes lines beggining with # (comments)
+	# sed '/^$/d' 					removes empty lines (seems to remove spaces and tabs also)
+	# sed '/^\ *\t*/d'				removes lines with only spaces and/or tabs
+	# only print lines between matching patterns : sed -n '/pattern1/,pattern2/p' 
+	# remove opening and closing brackets : sed '/[{}]/d' 
+
+parse_config() {
+
+	unset VALUE
+	unset FIELD
+
+	LABEL="$1"	
+	CONFIGURATION=$( sed '/^#/d' $CONFIG_FILE | sed '/^\ *\t*$/d' | sed -n "/$LABEL\ *{/,/}/p" | sed '/[{}]/d' | sed 's/^\ *\t*//' )
+	# EXPLICITLY define the IFS (Internal Field Separator)
+	# so paths with spaces don't get borked
+	IFS=$'\n' # Internal Field Separator
+	for fields in $CONFIGURATION;
+	do
+		# printf "%s\n" "$fields"
+		FIELD=$( printf "%s" "$fields" | cut -d = -f 1 )
+		# VALUE=$( printf "%s" "$fields" | cut -d = -f 2 | tr -d \" | tr -d '\t' ) 
+		VALUE=$( printf "%s" "$fields" | cut -d = -f 2 | sed 's/\"//g' | sed 's/\t//g' ) 
+		
+		case $FIELD in
+			"description"|"Description"|"DESCRIPTION")
+				if [ -z "$VALUE" ];
+				then
+					PREFIX_DESCRIPTION="$LABEL"
+				else
+					PREFIX_DESCRIPTION="$VALUE"
+				fi
+				;;
+			"prefix"|"Prefix"|"PREFIX")
+				if [ -z "$VALUE" ];
+				then
+					printf "%bMissing PREFIX in %b section. Check the config file\n" "$tab_error" "$error$LABEL$none"
+					exit 1
+				fi
+				PATH_PREFIX="$PATH_CELLAR/$VALUE"
+				;;
+			"folder"|"Folder"|"FOLDER")
+				if [ -z "$VALUE" ];
+				then
+					printf "%bPath to executable in %b section of the configuration is missing\n" "$tab_error" "$error$LABEL$none"
+					exit 1
+				fi
+				PATH_DRIVEC="$VALUE"
+				;;
+			"exec"|"Exec"|"EXEC")
+				if [ -z "$VALUE" ];
+				then
+					printf "%b Executable in %b section of the configuration is missing\n" "$tab_error"
+					exit 1
+				else
+					EXECUTABLE="$VALUE"
+				fi
+				;;
+		esac
+	done
+	# Always reset the IFS so it does not interfere with other scripts
+	unset $IFS 
+}
+
+# ---------------------------------------------------------------------------------------
+#  MAIN block
+# ---------------------------------------------------------------------------------------
+
+check_args "$@"
+defaults
+check_essentials
+action
+
+# ---------------------------------------------------------------------------------------
+#  End of script
+# ---------------------------------------------------------------------------------------

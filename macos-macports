@@ -139,7 +139,7 @@ action() {
 macports_clean() {
 	printf "\e[33m--->\e[0m  Cleaning Macports downloaded sources and unused packages ...\n"
 	printf "\e[33m--->\e[0m  Disk used before cleaning : %s\n" $( du -sh /opt | cut -f 1 ) 
-	sudo port clean --all installed && sudo port -f uninstall inactive
+	sudo port -f clean --all all && sudo port -f uninstall inactive
 	printf "\e[33m--->\e[0m  Disk used after cleaning : %s\n" $( du -sh /opt | cut -f 1 ) 
 }
 
