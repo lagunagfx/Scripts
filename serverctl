@@ -16,13 +16,14 @@
 #
 #  2023.12.08 | 1st draft
 #  2023.12.18 | Sync locally to folder implemented
+#  2026.09.30 | Usage message modified. Various formatting improvements pending
 #
 # ---------------------------------------------------------------------------------------
 #  Variables and Settings
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
-SCRIPT_VERSION="2023.12.18"
+SCRIPT_VERSION="2026.09.30"
 
 BACKUP_HOST=safebox
 BACKUP_PATH="/mnt/backu1drive"
@@ -43,8 +44,9 @@ usage() {
 	printf "   -h,   --help           show this help message\n"
 	printf "         --version        show current version\n"
 	printf "         --no-notify      turn off Pushover notifications\n"
-	printf "   -l,   --local          use '--inplace' mode with 'rsync'\n"
 	printf "   -b    --backup         sync the specified folder\n"
+	printf "   -d    --delete         delete all content not present on rsync's source\n"
+	printf "   -l,   --local          use '--inplace' mode with 'rsync'\n"
 	printf "   -r    --restore        sync back the folder from a local or remote backup\n"
 	printf "         --batch          reads a list of folders to backup\n"
 

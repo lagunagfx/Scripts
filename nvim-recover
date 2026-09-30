@@ -17,6 +17,7 @@
 #
 #  2022.10.01 | 1st sketch
 #  2022.10.02 | Improving error handling and self help
+#  2024.04.15 | Bugfix: Shows at leat 1 swap file present when swap folder is empty
 #
 # ---------------------------------------------------------------------------------------
 #  Known Issues
@@ -32,7 +33,7 @@
 # ---------------------------------------------------------------------------------------
 
 SCRIPT_NAME=$( basename $0 )
-SCRIPT_VERSION="2024.03.15"
+SCRIPT_VERSION="2025.04.15"
 
 # ---------------------------------------------------------------------------------------
 #  Base functions
@@ -160,8 +161,17 @@ swapfile_process() {
 	# list all swapfiles
 
 	SWAP_LIST=$( find $SWAP_FOLDER -maxdepth 1 -type f -name "*.swp" )
-	SWAP_COUNT=$( echo $SWAP_LIST | tr " " "\n" | wc -l )
-	
+
+	# an explicit exception must be made because running the 'find' command against a blank folder
+	# would still generate an empty "" string that is computed as one line by the 'wc -l' command
+
+	if [ "$SWAP_LIST" != "" ];
+	then
+		SWAP_COUNT=$( echo $SWAP_LIST | tr " " "\n" | wc -l )
+	else
+		SWAP_COUNT=0
+	fi
+
 	printf "\e[33m-->\e[0m " 
 
 	if [ $SWAP_COUNT -eq 0 ];

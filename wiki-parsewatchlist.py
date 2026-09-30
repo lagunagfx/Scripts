@@ -17,8 +17,8 @@ from bs4 import BeautifulSoup
 home = Path.home()
 
 # open file in read mode
-with open( home / 'Documentos' / 'Wiki' / 'leisure'/ 'watch.md', 'r') as source :
-    with open( home / 'Documentos' / 'Wiki' / 'leisure'/ 'watch_parsed.md', 'w') as destination : 
+with open( home / 'Documentos' / 'Wiki' / 'leisure'/ 'youtube.unprocessed', 'r') as source :
+    with open( home / 'Documentos' / 'Wiki' / 'leisure'/ 'youtube.md', 'w') as destination : 
         for line in source :
             if line.strip().find("https://www.youtube.com/watch") == 0 :
             #if "https://www.youtube.com/" in line.strip():
